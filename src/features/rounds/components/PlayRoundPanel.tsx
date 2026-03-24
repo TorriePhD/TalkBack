@@ -7,11 +7,28 @@ import { saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
 import type { Round } from '../types';
 
 interface PlayRoundPanelProps {
+  currentUserId: string;
   round: Round | null;
   onUpdateRound: (roundId: string, updater: (round: Round) => Round) => void;
 }
 
-export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
+function describeSenderView(round: Round) {
+  if (round.status === 'complete') {
+    return `${round.recipientEmail} finished the round.`;
+  }
+
+  if (round.status === 'attempted') {
+    return `${round.recipientEmail} recorded an attempt and still needs to submit a guess.`;
+  }
+
+  return `Waiting for ${round.recipientEmail} to record an attempt.`;
+}
+
+export function PlayRoundPanel({
+  currentUserId,
+  round,
+  onUpdateRound,
+}: PlayRoundPanelProps) {
   const recorder = useAudioRecorder();
   const [guess, setGuess] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +45,8 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
     lastSavedAttemptBlobRef.current = null;
   }, [round?.id, recorder.clearRecording]);
 
+  const isRecipient = Boolean(round && round.recipientId === currentUserId);
+  const showOriginalReference = Boolean(round && (!isRecipient || round.status === 'complete'));
   const hasAttempt = Boolean(
     round &&
       (round.attemptAudioBlob || round.attemptAudioUrl) &&
@@ -36,11 +55,11 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
 
   const canSubmitGuess = useMemo(
     () =>
-      Boolean(round && hasAttempt && guess.trim()) &&
+      Boolean(round && isRecipient && hasAttempt && guess.trim()) &&
       round?.status !== 'complete' &&
       !isSavingAttempt &&
       !isSubmittingGuess,
-    [guess, hasAttempt, isSavingAttempt, isSubmittingGuess, round],
+    [guess, hasAttempt, isRecipient, isSavingAttempt, isSubmittingGuess, round],
   );
 
   const saveAttempt = async (
@@ -49,6 +68,10 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
     options: { cancelled?: () => boolean } = {},
   ) => {
     const { cancelled } = options;
+
+    if (currentRound.recipientId !== currentUserId) {
+      return;
+    }
 
     setError(null);
     setInfo(null);
@@ -61,6 +84,7 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
       }
 
       const savedRound = await saveRoundAttempt({
+        currentUserId,
         roundId: currentRound.id,
         attemptAudioBlob: attemptBlob,
         attemptReversedBlob: reversedAttemptBlob,
@@ -94,7 +118,13 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
   };
 
   useEffect(() => {
-    if (!round || !recorder.audioBlob || recorder.isRecording || round.status === 'complete') {
+    if (
+      !round ||
+      !isRecipient ||
+      !recorder.audioBlob ||
+      recorder.isRecording ||
+      round.status === 'complete'
+    ) {
       return;
     }
 
@@ -111,20 +141,20 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [onUpdateRound, recorder.audioBlob, recorder.isRecording, round]);
+  }, [currentUserId, isRecipient, onUpdateRound, recorder.audioBlob, recorder.isRecording, round]);
 
   if (!round) {
     return (
       <section className="surface">
         <div className="empty-state">
-          Select a round from the inbox to hear the reversed phrase and record an attempt.
+          Select a round from your list to hear the reversed phrase and continue the game.
         </div>
       </section>
     );
   }
 
   const handleSaveAttempt = async () => {
-    if (!recorder.audioBlob || round.status === 'complete') {
+    if (!recorder.audioBlob || round.status === 'complete' || !isRecipient) {
       return;
     }
 
@@ -133,7 +163,7 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
 
   const handleSubmitGuess = async () => {
     const nextGuess = guess.trim();
-    if (!nextGuess) {
+    if (!nextGuess || !isRecipient) {
       return;
     }
 
@@ -155,7 +185,7 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
         attemptAudioBlob: currentRound.attemptAudioBlob,
         attemptReversedBlob: currentRound.attemptReversedBlob,
       }));
-      setInfo(updatedRound.score === 10 ? 'Exact match. Full score.' : 'Round complete. No exact match.');
+      setInfo(updatedRound.score === 10 ? 'Exact match. Full score.' : 'Round complete.');
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : 'Unable to submit the guess.',
@@ -171,8 +201,9 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
         <div>
           <h2>Play Round</h2>
           <p>
-            {round.player2Name} listens to the reversed prompt, imitates it, and guesses the
-            original phrase.
+            {isRecipient
+              ? `You received this round from ${round.senderEmail}.`
+              : `You sent this round to ${round.recipientEmail}.`}
           </p>
         </div>
         <StatusBadge status={round.status} />
@@ -181,32 +212,37 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
       <div className="panel-grid">
         <div className="stack">
           <div className="info-banner">
-            <strong>{round.player1Name}</strong> recorded the original phrase for{' '}
-            <strong>{round.player2Name}</strong>.
+            {isRecipient
+              ? `Only you and ${round.senderEmail} can access this round and its audio files.`
+              : `Only you and ${round.recipientEmail} can access this round and its audio files.`}
           </div>
 
           <div className="audio-grid">
             <AudioPlayerCard
               title="Reversed Prompt"
-              description="Player 2 should imitate this strange-sounding version."
+              description="This is the backwards-sounding clip the recipient should imitate."
               blob={round.reversedAudioBlob}
               remoteUrl={round.reversedAudioUrl}
             />
             <AudioPlayerCard
               title="Original Phrase"
-              description="Reveal and compare after the guess."
-              blob={round.originalAudioBlob}
-              remoteUrl={round.originalAudioUrl}
+              description={
+                showOriginalReference
+                  ? 'The original recording for comparison.'
+                  : 'Locked until you finish the round.'
+              }
+              blob={showOriginalReference ? round.originalAudioBlob : null}
+              remoteUrl={showOriginalReference ? round.originalAudioUrl : null}
             />
             <AudioPlayerCard
               title="Latest Attempt"
-              description="Player 2's raw imitation recording."
+              description="The recipient's raw imitation recording."
               blob={recorder.audioBlob ?? round.attemptAudioBlob}
               remoteUrl={round.attemptAudioUrl}
             />
             <AudioPlayerCard
               title="Reversed Attempt"
-              description="This should sound close to the original if the imitation was good."
+              description="This flipped attempt should sound close to the original."
               blob={round.attemptReversedBlob}
               remoteUrl={round.attemptReversedUrl}
             />
@@ -214,93 +250,118 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
         </div>
 
         <div className="stack">
-          <div className="surface">
-            <div className="section-header">
-              <div>
-                <h3>Record Attempt</h3>
-                <p>Capture a new imitation. It will be reversed automatically and saved to Supabase.</p>
+          {isRecipient ? (
+            <>
+              <div className="surface nested-surface">
+                <div className="section-header">
+                  <div>
+                    <h3>Record Attempt</h3>
+                    <p>Capture a new imitation. It will be reversed automatically and saved.</p>
+                  </div>
+                </div>
+
+                <div className="button-row">
+                  <button
+                    className="button primary"
+                    disabled={
+                      recorder.isRecording || recorder.isPreparing || round.status === 'complete'
+                    }
+                    onClick={() => {
+                      void recorder.startRecording();
+                    }}
+                    type="button"
+                  >
+                    {recorder.isPreparing ? 'Requesting mic...' : 'Start attempt'}
+                  </button>
+                  <button
+                    className="button warning"
+                    disabled={!recorder.isRecording}
+                    onClick={recorder.stopRecording}
+                    type="button"
+                  >
+                    Stop attempt
+                  </button>
+                  <button
+                    className="button secondary"
+                    disabled={
+                      !recorder.audioBlob ||
+                      isSavingAttempt ||
+                      isSubmittingGuess ||
+                      round.status === 'complete'
+                    }
+                    onClick={() => {
+                      void handleSaveAttempt();
+                    }}
+                    type="button"
+                  >
+                    {isSavingAttempt ? 'Saving attempt...' : 'Reverse + save attempt'}
+                  </button>
+                </div>
+
+                <div className="helper-text">
+                  {recorder.isRecording
+                    ? 'Attempt recording in progress.'
+                    : isSavingAttempt
+                      ? 'Auto-reversing and saving your latest attempt...'
+                      : recorder.audioBlob
+                        ? 'A fresh attempt is ready. You can retry saving it if needed.'
+                        : 'Listen to the reversed prompt, then record a reply.'}
+                </div>
+              </div>
+
+              <div className="surface nested-surface">
+                <div className="section-header">
+                  <div>
+                    <h3>Guess + Score</h3>
+                    <p>Submit your best guess after your attempt is saved.</p>
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label htmlFor="guess">Your guess</label>
+                  <input
+                    id="guess"
+                    disabled={round.status === 'complete' || isSubmittingGuess}
+                    onChange={(event) => setGuess(event.target.value)}
+                    placeholder="What was the original phrase?"
+                    value={guess}
+                  />
+                </div>
+
+                <div className="button-row">
+                  <button
+                    className="button primary"
+                    disabled={!canSubmitGuess}
+                    onClick={() => {
+                      void handleSubmitGuess();
+                    }}
+                    type="button"
+                  >
+                    {isSubmittingGuess ? 'Submitting guess...' : 'Submit guess'}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="surface nested-surface">
+              <div className="section-header">
+                <div>
+                  <h3>Recipient Progress</h3>
+                  <p>Only {round.recipientEmail} can record the attempt and submit the guess.</p>
+                </div>
+              </div>
+
+              <div className="info-banner">{describeSenderView(round)}</div>
+              <div className="result-box">
+                <p>
+                  <strong>Correct phrase:</strong> {round.correctPhrase}
+                </p>
+                <p>
+                  <strong>Recipient:</strong> {round.recipientEmail}
+                </p>
               </div>
             </div>
-
-            <div className="button-row">
-              <button
-                className="button primary"
-                disabled={recorder.isRecording || recorder.isPreparing || round.status === 'complete'}
-                onClick={() => {
-                  void recorder.startRecording();
-                }}
-                type="button"
-              >
-                {recorder.isPreparing ? 'Requesting mic...' : 'Start attempt'}
-              </button>
-              <button
-                className="button warning"
-                disabled={!recorder.isRecording}
-                onClick={recorder.stopRecording}
-                type="button"
-              >
-                Stop attempt
-              </button>
-              <button
-                className="button secondary"
-                disabled={
-                  !recorder.audioBlob ||
-                  isSavingAttempt ||
-                  isSubmittingGuess ||
-                  round.status === 'complete'
-                }
-                onClick={() => {
-                  void handleSaveAttempt();
-                }}
-                type="button"
-              >
-                {isSavingAttempt ? 'Saving attempt...' : 'Reverse + save attempt'}
-              </button>
-            </div>
-
-            <div className="helper-text">
-              {recorder.isRecording
-                ? 'Attempt recording in progress.'
-                : isSavingAttempt
-                  ? 'Auto-reversing and saving your latest attempt...'
-                  : recorder.audioBlob
-                    ? 'A fresh attempt is ready. You can retry saving it if needed.'
-                    : 'Listen to the reversed prompt, then record a reply.'}
-            </div>
-          </div>
-
-          <div className="surface">
-            <div className="section-header">
-              <div>
-                <h3>Guess + Score</h3>
-                <p>Score is based on Wasserstein edit distance, normalized to a 10-point scale.</p>
-              </div>
-            </div>
-
-            <div className="field">
-              <label htmlFor="guess">Player 2 guess</label>
-              <input
-                id="guess"
-                value={guess}
-                onChange={(event) => setGuess(event.target.value)}
-                disabled={round.status === 'complete' || isSubmittingGuess}
-                placeholder="What did Player 1 actually say?"
-              />
-            </div>
-
-            <div className="button-row">
-              <button
-                className="button primary"
-                disabled={!canSubmitGuess}
-                onClick={() => {
-                  void handleSubmitGuess();
-                }}
-                type="button"
-              >
-                {isSubmittingGuess ? 'Submitting guess...' : 'Submit guess'}
-              </button>
-            </div>
-          </div>
+          )}
 
           {recorder.error ? <div className="error-banner">{recorder.error}</div> : null}
           {error ? <div className="error-banner">{error}</div> : null}

@@ -1,13 +1,15 @@
 import type { Round } from '../features/rounds/types';
 import { scoreGuess } from '../features/rounds/utils';
 import { supabase, supabaseConfigError } from './supabase';
-import { resolveAudioUrl, uploadAudio } from './storage/uploadAudio';
+import { createSignedAudioUrl, uploadAudio } from './storage/uploadAudio';
 
 const ROUND_COLUMNS = [
   'id',
   'created_at',
-  'player1_name',
-  'player2_name',
+  'sender_id',
+  'sender_email',
+  'recipient_id',
+  'recipient_email',
   'correct_phrase',
   'original_audio_path',
   'reversed_audio_path',
@@ -21,8 +23,10 @@ const ROUND_COLUMNS = [
 interface RoundRow {
   id: string;
   created_at: string;
-  player1_name: string;
-  player2_name: string;
+  sender_id: string;
+  sender_email: string;
+  recipient_id: string;
+  recipient_email: string;
   correct_phrase: string;
   original_audio_path: string;
   reversed_audio_path: string;
@@ -34,14 +38,15 @@ interface RoundRow {
 }
 
 interface CreateRoundRecordInput {
-  player1Name: string;
-  player2Name: string;
+  currentUserId: string;
+  recipientId: string;
   correctPhrase: string;
   originalAudioBlob: Blob;
   reversedAudioBlob: Blob;
 }
 
 interface SaveRoundAttemptInput {
+  currentUserId: string;
   roundId: string;
   attemptAudioBlob: Blob;
   attemptReversedBlob: Blob;
@@ -67,22 +72,32 @@ function makeRoundId() {
     : `round-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function mapRoundRow(row: RoundRow): Round {
+async function mapRoundRow(row: RoundRow): Promise<Round> {
+  const [originalAudioUrl, reversedAudioUrl, attemptAudioUrl, attemptReversedUrl] =
+    await Promise.all([
+      createSignedAudioUrl(row.original_audio_path),
+      createSignedAudioUrl(row.reversed_audio_path),
+      createSignedAudioUrl(row.attempt_audio_path),
+      createSignedAudioUrl(row.attempt_reversed_path),
+    ]);
+
   return {
     id: row.id,
     createdAt: row.created_at,
-    player1Name: row.player1_name,
-    player2Name: row.player2_name,
+    senderId: row.sender_id,
+    senderEmail: row.sender_email,
+    recipientId: row.recipient_id,
+    recipientEmail: row.recipient_email,
     correctPhrase: row.correct_phrase,
     originalAudioBlob: null,
     reversedAudioBlob: null,
-    originalAudioUrl: resolveAudioUrl(row.original_audio_path),
-    reversedAudioUrl: resolveAudioUrl(row.reversed_audio_path),
+    originalAudioUrl,
+    reversedAudioUrl,
     guess: row.guess ?? '',
     attemptAudioBlob: null,
     attemptReversedBlob: null,
-    attemptAudioUrl: resolveAudioUrl(row.attempt_audio_path),
-    attemptReversedUrl: resolveAudioUrl(row.attempt_reversed_path),
+    attemptAudioUrl,
+    attemptReversedUrl,
     score: row.score,
     status: row.status,
   };
@@ -99,7 +114,7 @@ export async function listRounds(): Promise<Round[]> {
     throw new Error(`Unable to load rounds: ${error.message}`);
   }
 
-  return ((data as unknown as RoundRow[] | null) ?? []).map(mapRoundRow);
+  return Promise.all(((data as unknown as RoundRow[] | null) ?? []).map(mapRoundRow));
 }
 
 export async function createRoundRecord(
@@ -108,16 +123,23 @@ export async function createRoundRecord(
   const client = requireSupabase();
   const roundId = makeRoundId();
   const [originalAudio, reversedAudio] = await Promise.all([
-    uploadAudio(input.originalAudioBlob, { roundId, label: 'original' }),
-    uploadAudio(input.reversedAudioBlob, { roundId, label: 'reversed' }),
+    uploadAudio(input.originalAudioBlob, {
+      ownerId: input.currentUserId,
+      roundId,
+      label: 'original',
+    }),
+    uploadAudio(input.reversedAudioBlob, {
+      ownerId: input.currentUserId,
+      roundId,
+      label: 'reversed',
+    }),
   ]);
 
   const { data, error } = await client
     .from('rounds')
     .insert({
       id: roundId,
-      player1_name: input.player1Name.trim(),
-      player2_name: input.player2Name.trim(),
+      recipient_id: input.recipientId,
       correct_phrase: input.correctPhrase.trim(),
       original_audio_path: originalAudio.path,
       reversed_audio_path: reversedAudio.path,
@@ -131,7 +153,7 @@ export async function createRoundRecord(
   }
 
   return {
-    ...mapRoundRow(data as unknown as RoundRow),
+    ...(await mapRoundRow(data as unknown as RoundRow)),
     originalAudioBlob: input.originalAudioBlob,
     reversedAudioBlob: input.reversedAudioBlob,
   };
@@ -143,10 +165,12 @@ export async function saveRoundAttempt(
   const client = requireSupabase();
   const [attemptAudio, attemptReversedAudio] = await Promise.all([
     uploadAudio(input.attemptAudioBlob, {
+      ownerId: input.currentUserId,
       roundId: input.roundId,
       label: 'attempt',
     }),
     uploadAudio(input.attemptReversedBlob, {
+      ownerId: input.currentUserId,
       roundId: input.roundId,
       label: 'attempt-reversed',
     }),
@@ -168,7 +192,7 @@ export async function saveRoundAttempt(
   }
 
   return {
-    ...mapRoundRow(data as unknown as RoundRow),
+    ...(await mapRoundRow(data as unknown as RoundRow)),
     attemptAudioBlob: input.attemptAudioBlob,
     attemptReversedBlob: input.attemptReversedBlob,
   };

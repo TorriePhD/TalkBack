@@ -1,50 +1,77 @@
-# TalkBack Phase 1
+# TalkBack
 
+Vite + React + TypeScript party-game prototype backed by Supabase Auth, Postgres, and Storage.
 
+The app now supports:
 
-Vite + React + TypeScript prototype for the reversed-audio party game. Rounds now persist in Supabase, and recordings are stored in the `audio` bucket so prompts and attempts can be retrieved after refresh or from another device.
+- email/password sign up and log in
+- private user profiles synced from `auth.users`
+- email-based friend requests
+- accepted friendships
+- private rounds that only the sender and recipient can read
+- private audio storage with signed URLs
 
-## Run
+## Supabase Setup
 
-1. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-2. Copy `.env.example` to `.env.local` and set:
+1. Copy `.env.example` to `.env.local` and set:
 
    ```bash
    VITE_SUPABASE_URL=your-project-url
    VITE_SUPABASE_ANON_KEY=your-anon-key
    ```
 
-3. Apply the Supabase migration in [`supabase/migrations/20260324144708_remote_schema.sql`](./supabase/migrations/20260324144708_remote_schema.sql). This creates the `rounds` table, the public `audio` bucket, and the policies the client uses.
+2. In the Supabase dashboard, open `Authentication > Providers` and enable `Email`.
+
+3. Decide whether new accounts must confirm their email:
+
+   - If you want instant local testing, turn off email confirmation.
+   - If you keep email confirmation on, make sure the app URL is in `Authentication > URL Configuration`.
+
+4. Apply the migrations:
 
    ```bash
    supabase db push
    ```
 
-4. Start the dev server on your LAN:
+   The new auth/social migration is [`supabase/migrations/20260324202000_auth_friend_rounds.sql`](./supabase/migrations/20260324202000_auth_friend_rounds.sql).
+
+5. Start the app:
 
    ```bash
    npm run dev
    ```
 
-5. Find your local IP on Windows:
+## Auth Notes
 
-   ```powershell
-   ipconfig
-   ```
+- Supabase does support OAuth providers like Google, GitHub, Apple, and others.
+- This app is wired for email/password accounts because friend requests target exact email addresses.
+- You can still enable OAuth later, but you should make sure the provider returns a verified email address if you want the friend-request flow to stay email-based.
 
-   Look for your Wi-Fi or Ethernet IPv4 address, then open `http://YOUR_IP:5173` on another device on the same network.
+## What The Migration Creates
 
-## Notes
+- `profiles`: one row per `auth.users` account
+- `friend_requests`: pending or resolved friendship invitations
+- `friendships`: accepted friend pairs
+- `rounds`: sender/recipient-scoped rounds
+- private `audio` bucket access policies
+- RPCs:
+  - `request_friendship(recipient_email_input text)`
+  - `respond_to_friend_request(friend_request_id uuid, accept_request boolean)`
 
-- `npm run dev` binds Vite to `0.0.0.0` and keeps port `5173` fixed for easier LAN testing.
-- If you change `.env.local`, restart Vite.
-- `getUserMedia()` only works in a secure context. `localhost` counts, but `http://YOUR_IP:5173` does not, so remote devices can load the app over plain HTTP but usually cannot record.
-- On GitHub Pages, the app is served over HTTPS, so microphone APIs can work there as long as the browser grants mic permission.
+## Behavior
+
+- Users only see rounds where they are the sender or recipient.
+- Only confirmed friends can receive new rounds.
+- Only the recipient can upload an attempt and submit a guess.
+- Audio files are stored in private storage and loaded with signed URLs.
+
+## Local Validation
+
+Production build passes:
+
+```bash
+npm run build
+```
 
 ## HTTPS For Cross-Device Recording
 
@@ -66,29 +93,3 @@ To test microphone recording from another device on the same LAN, serve Vite ove
    ```
 
 4. Open `https://YOUR_HOSTNAME_OR_IP:5173` on the other device, and make sure that device trusts the certificate chain.
-
-If the certificate is not trusted by the device, the page may still load with a warning, but microphone APIs can remain unavailable.
-
-## Deploy To GitHub Pages
-
-This repo now includes a GitHub Actions Pages workflow in `.github/workflows/deploy-pages.yml`.
-
-1. Push the repo to GitHub.
-2. In GitHub, open `Settings > Pages`.
-3. Set `Build and deployment` to `GitHub Actions`.
-4. Push to `main`, or run the `Deploy GitHub Pages` workflow manually.
-
-### Base Path Behavior
-
-- For a project site like `https://TorriePhD.github.io/TalkBack/`, the build automatically uses `/TalkBack/`.
-- For a user site repo named like `username.github.io`, the build automatically uses `/`.
-- To override that, set a repository variable named `BASE_PATH`, for example `/` or `/TalkBack/`.
-
-### Optional GitHub Variables
-
-If you want Supabase Storage uploads to work on the deployed site, add these repository variables in `Settings > Secrets and variables > Actions > Variables`:
-
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-
-These values are embedded into the client bundle at build time, so they should be treated as public client-side configuration.

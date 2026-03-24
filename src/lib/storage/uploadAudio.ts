@@ -4,6 +4,7 @@ const AUDIO_BUCKET = 'audio';
 const DEFAULT_PREFIX = 'rounds';
 
 interface UploadAudioOptions {
+  ownerId: string;
   roundId?: string;
   label?: string;
 }
@@ -22,8 +23,9 @@ function sanitizePathSegment(value: string) {
     .replace(/^\/+|\/+$/g, '');
 }
 
-function buildAudioPath({ roundId, label }: UploadAudioOptions = {}) {
+function buildAudioPath({ ownerId, roundId, label }: UploadAudioOptions) {
   const safePrefix = sanitizePathSegment(DEFAULT_PREFIX) || DEFAULT_PREFIX;
+  const safeOwnerId = sanitizePathSegment(ownerId) || 'owner';
   const safeRoundId = sanitizePathSegment(roundId || 'draft') || 'draft';
   const safeLabel = sanitizePathSegment(label || 'audio') || 'audio';
   const randomPart =
@@ -31,24 +33,28 @@ function buildAudioPath({ roundId, label }: UploadAudioOptions = {}) {
       ? crypto.randomUUID().slice(0, 8)
       : Math.random().toString(36).slice(2, 10);
 
-  return `${safePrefix}/${safeRoundId}/${safeLabel}-${Date.now()}-${randomPart}.wav`;
+  return `${safePrefix}/${safeOwnerId}/${safeRoundId}/${safeLabel}-${Date.now()}-${randomPart}.wav`;
 }
 
-export function resolveAudioUrl(path: string | null | undefined) {
+export async function createSignedAudioUrl(path: string | null | undefined) {
   if (!path || !supabase) {
     return null;
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(AUDIO_BUCKET).getPublicUrl(path);
+  const { data, error } = await supabase.storage
+    .from(AUDIO_BUCKET)
+    .createSignedUrl(path, 60 * 60);
 
-  return publicUrl || null;
+  if (error) {
+    throw new Error(`Unable to create an audio URL: ${error.message}`);
+  }
+
+  return data.signedUrl || null;
 }
 
 export async function uploadAudio(
   blob: Blob,
-  options?: UploadAudioOptions,
+  options: UploadAudioOptions,
 ): Promise<UploadedAudioAsset> {
   if (!supabase) {
     throw new Error(supabaseConfigError || 'Supabase is not configured.');
@@ -66,7 +72,7 @@ export async function uploadAudio(
     throw new Error(`Upload failed: ${error.message}`);
   }
 
-  const url = resolveAudioUrl(path);
+  const url = await createSignedAudioUrl(path);
 
   if (!url) {
     throw new Error('The upload succeeded, but no public URL was returned.');

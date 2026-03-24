@@ -2,17 +2,25 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
+import type { Friend } from '../../social/types';
 import { createRoundRecord } from '../../../lib/rounds';
 import type { Round } from '../types';
 
 interface CreateRoundPanelProps {
+  currentUserEmail: string;
+  currentUserId: string;
+  friends: Friend[];
   onCreateRound: (round: Round) => void;
 }
 
-export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
+export function CreateRoundPanel({
+  currentUserEmail,
+  currentUserId,
+  friends,
+  onCreateRound,
+}: CreateRoundPanelProps) {
   const recorder = useAudioRecorder();
-  const [player1Name, setPlayer1Name] = useState('');
-  const [player2Name, setPlayer2Name] = useState('');
+  const [recipientId, setRecipientId] = useState('');
   const [correctPhrase, setCorrectPhrase] = useState('');
   const [reversedAudioBlob, setReversedAudioBlob] = useState<Blob | null>(null);
   const [reverseError, setReverseError] = useState<string | null>(null);
@@ -20,6 +28,17 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
   const [isReversing, setIsReversing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const lastAutoReversedBlobRef = useRef<Blob | null>(null);
+
+  useEffect(() => {
+    if (!friends.length) {
+      setRecipientId('');
+      return;
+    }
+
+    setRecipientId((currentRecipientId) =>
+      friends.some((friend) => friend.id === currentRecipientId) ? currentRecipientId : friends[0].id,
+    );
+  }, [friends]);
 
   useEffect(() => {
     setReversedAudioBlob(null);
@@ -73,15 +92,14 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
     };
   }, [recorder.audioBlob, recorder.isRecording]);
 
+  const selectedFriend = useMemo(
+    () => friends.find((friend) => friend.id === recipientId) ?? null,
+    [friends, recipientId],
+  );
+
   const canCreateRound = useMemo(
     () =>
-      Boolean(
-        player1Name.trim() &&
-          player2Name.trim() &&
-          correctPhrase.trim() &&
-          recorder.audioBlob &&
-          reversedAudioBlob,
-      ) &&
+      Boolean(recipientId && correctPhrase.trim() && recorder.audioBlob && reversedAudioBlob) &&
       !isReversing &&
       !isSaving &&
       !recorder.isRecording &&
@@ -90,8 +108,7 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
       correctPhrase,
       isReversing,
       isSaving,
-      player1Name,
-      player2Name,
+      recipientId,
       recorder.audioBlob,
       recorder.isPreparing,
       recorder.isRecording,
@@ -122,8 +139,6 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
   };
 
   const resetForm = () => {
-    setPlayer1Name('');
-    setPlayer2Name('');
     setCorrectPhrase('');
     setReversedAudioBlob(null);
     setReverseError(null);
@@ -133,7 +148,7 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
   };
 
   const handleCreateRound = async () => {
-    if (!recorder.audioBlob || !reversedAudioBlob) {
+    if (!recorder.audioBlob || !reversedAudioBlob || !recipientId) {
       return;
     }
 
@@ -142,8 +157,8 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
 
     try {
       const nextRound = await createRoundRecord({
-        player1Name: player1Name.trim(),
-        player2Name: player2Name.trim(),
+        currentUserId,
+        recipientId,
         correctPhrase: correctPhrase.trim(),
         originalAudioBlob: recorder.audioBlob,
         reversedAudioBlob,
@@ -158,12 +173,30 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
     }
   };
 
+  if (!friends.length) {
+    return (
+      <section className="surface">
+        <div className="section-header">
+          <div>
+            <h2>Create Round</h2>
+            <p>Rounds can only be sent to confirmed friends.</p>
+          </div>
+        </div>
+
+        <div className="empty-state">
+          Add a friend first. Once someone accepts your request, they will appear here as a round
+          recipient.
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="surface">
       <div className="section-header">
         <div>
           <h2>Create Round</h2>
-          <p>Record the original phrase, reverse it, and save the round to Supabase.</p>
+          <p>Record the phrase, reverse it, and send the round to one of your confirmed friends.</p>
         </div>
       </div>
 
@@ -171,22 +204,22 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
         <div className="stack">
           <div className="field-grid two-up">
             <div className="field">
-              <label htmlFor="player1Name">Player 1 name</label>
-              <input
-                id="player1Name"
-                value={player1Name}
-                onChange={(event) => setPlayer1Name(event.target.value)}
-                placeholder="Who records the phrase?"
-              />
+              <label htmlFor="senderEmail">From</label>
+              <input id="senderEmail" readOnly value={currentUserEmail} />
             </div>
             <div className="field">
-              <label htmlFor="player2Name">Player 2 name</label>
-              <input
-                id="player2Name"
-                value={player2Name}
-                onChange={(event) => setPlayer2Name(event.target.value)}
-                placeholder="Who will imitate it?"
-              />
+              <label htmlFor="recipientId">Send to friend</label>
+              <select
+                id="recipientId"
+                onChange={(event) => setRecipientId(event.target.value)}
+                value={recipientId}
+              >
+                {friends.map((friend) => (
+                  <option key={friend.id} value={friend.id}>
+                    {friend.email}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -194,20 +227,21 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
             <label htmlFor="correctPhrase">Correct phrase</label>
             <textarea
               id="correctPhrase"
-              value={correctPhrase}
               onChange={(event) => setCorrectPhrase(event.target.value)}
-              placeholder="Type the phrase Player 1 is actually saying."
+              placeholder="Type the phrase your friend will try to decode."
+              value={correctPhrase}
             />
             <div className="helper-text">
-              Scoring uses Wasserstein edit distance normalized to a 10-point scale.
+              The phrase stays private to the round participants and scoring uses a normalized edit
+              distance on a 10-point scale.
             </div>
           </div>
 
-          <div className="surface">
+          <div className="surface nested-surface">
             <div className="section-header">
               <div>
                 <h3>Original Recording</h3>
-                <p>Capture a short phrase. WebM/Opus is preferred when the browser supports it.</p>
+                <p>Capture the phrase that {selectedFriend?.email ?? 'your friend'} will decode.</p>
               </div>
             </div>
 
@@ -258,12 +292,12 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
           <div className="audio-grid">
             <AudioPlayerCard
               title="Original Phrase"
-              description="This is the clean Player 1 recording."
+              description="Your clean recording before any processing."
               blob={recorder.audioBlob}
             />
             <AudioPlayerCard
               title="Reversed Phrase"
-              description="This is the version Player 2 should imitate."
+              description="This is what your friend will hear when the round arrives."
               blob={reversedAudioBlob}
             />
           </div>
@@ -287,7 +321,7 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
               }}
               type="button"
             >
-              {isSaving ? 'Creating round...' : 'Create shared round'}
+              {isSaving ? 'Sending round...' : 'Send round'}
             </button>
           </div>
 
@@ -295,7 +329,7 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
             {isReversing
               ? 'Auto-reversing the latest recording...'
               : reversedAudioBlob
-                ? 'Reversed audio is ready. Creating the round uploads both clips to Supabase and adds the round to the shared inbox.'
+                ? `The reversed prompt is ready. Sending this round will upload both clips to private Supabase Storage and assign the round to ${selectedFriend?.email ?? 'your friend'}.`
                 : 'Stop recording to automatically generate the reversed clip.'}
           </div>
         </div>

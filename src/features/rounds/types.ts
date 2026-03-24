@@ -1,14 +1,12 @@
-export type RoundStatus =
-  | 'created'
-  | 'waiting_for_attempt'
-  | 'attempted'
-  | 'complete';
+export type RoundStatus = 'waiting_for_attempt' | 'attempted' | 'complete';
 
 export interface Round {
   id: string;
   createdAt: string;
-  player1Name: string;
-  player2Name: string;
+  senderId: string;
+  senderEmail: string;
+  recipientId: string;
+  recipientEmail: string;
   correctPhrase: string;
   originalAudioBlob: Blob | null;
   reversedAudioBlob: Blob | null;

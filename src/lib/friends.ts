@@ -1,0 +1,119 @@
+import type { FriendRequest } from '../features/social/types';
+import type { Friend } from '../features/social/types';
+import { supabase, supabaseConfigError } from './supabase';
+
+interface FriendshipRow {
+  id: string;
+  user_one_id: string;
+  user_one_email: string;
+  user_two_id: string;
+  user_two_email: string;
+  created_at: string;
+}
+
+interface FriendRequestRow {
+  id: string;
+  requester_id: string;
+  requester_email: string;
+  recipient_id: string;
+  recipient_email: string;
+  status: FriendRequest['status'];
+  created_at: string;
+  responded_at: string | null;
+}
+
+function requireSupabase() {
+  if (!supabase) {
+    throw new Error(supabaseConfigError || 'Supabase is not configured.');
+  }
+
+  return supabase;
+}
+
+export async function listFriends(currentUserId: string): Promise<Friend[]> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('friendships')
+    .select('id, user_one_id, user_one_email, user_two_id, user_two_email, created_at')
+    .or(`user_one_id.eq.${currentUserId},user_two_id.eq.${currentUserId}`)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(`Unable to load friends: ${error.message}`);
+  }
+
+  return ((data as FriendshipRow[] | null) ?? []).map((row) =>
+    row.user_one_id === currentUserId
+      ? {
+          id: row.user_two_id,
+          email: row.user_two_email,
+          createdAt: row.created_at,
+        }
+      : {
+          id: row.user_one_id,
+          email: row.user_one_email,
+          createdAt: row.created_at,
+        },
+  );
+}
+
+export async function listFriendRequests(
+  currentUserId: string,
+): Promise<FriendRequest[]> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('friend_requests')
+    .select(
+      'id, requester_id, requester_email, recipient_id, recipient_email, status, created_at, responded_at',
+    )
+    .eq('status', 'pending')
+    .or(`requester_id.eq.${currentUserId},recipient_id.eq.${currentUserId}`)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(`Unable to load friend requests: ${error.message}`);
+  }
+
+  return ((data as FriendRequestRow[] | null) ?? []).map((row) => {
+    const isIncoming = row.recipient_id === currentUserId;
+
+    return {
+      id: row.id,
+      requesterId: row.requester_id,
+      requesterEmail: row.requester_email,
+      recipientId: row.recipient_id,
+      recipientEmail: row.recipient_email,
+      status: row.status,
+      createdAt: row.created_at,
+      respondedAt: row.responded_at,
+      direction: isIncoming ? 'incoming' : 'outgoing',
+      otherUserId: isIncoming ? row.requester_id : row.recipient_id,
+      otherUserEmail: isIncoming ? row.requester_email : row.recipient_email,
+    };
+  });
+}
+
+export async function sendFriendRequestByEmail(recipientEmail: string) {
+  const client = requireSupabase();
+  const { error } = await client.rpc('request_friendship', {
+    recipient_email_input: recipientEmail.trim().toLowerCase(),
+  });
+
+  if (error) {
+    throw new Error(`Unable to send the friend request: ${error.message}`);
+  }
+}
+
+export async function respondToFriendRequest(requestId: string, accept: boolean) {
+  const client = requireSupabase();
+  const { error } = await client.rpc('respond_to_friend_request', {
+    friend_request_id: requestId,
+    accept_request: accept,
+  });
+
+  if (error) {
+    throw new Error(
+      `Unable to ${accept ? 'accept' : 'reject'} the friend request: ${error.message}`,
+    );
+  }
+}

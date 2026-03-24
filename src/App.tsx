@@ -2,60 +2,150 @@ import { useEffect, useMemo, useState } from 'react';
 import { CreateRoundPanel } from './features/rounds/components/CreateRoundPanel';
 import { InboxPanel } from './features/rounds/components/InboxPanel';
 import { PlayRoundPanel } from './features/rounds/components/PlayRoundPanel';
+import { AuthPanel } from './features/auth/components/AuthPanel';
+import { FriendsPanel } from './features/social/components/FriendsPanel';
 import type { Round } from './features/rounds/types';
+import type { FriendRequest } from './features/social/types';
+import type { Friend } from './features/social/types';
+import type { AppProfile } from './lib/auth';
+import {
+  getMyProfile,
+  getSession,
+  signOut,
+  subscribeToAuthChanges,
+} from './lib/auth';
+import { listFriendRequests, listFriends } from './lib/friends';
 import { listRounds } from './lib/rounds';
+import { supabaseConfigError } from './lib/supabase';
 
-type View = 'create' | 'inbox' | 'play';
+type View = 'friends' | 'create' | 'inbox' | 'play';
 
 function App() {
-  const [view, setView] = useState<View>('create');
+  const [view, setView] = useState<View>('friends');
+  const [profile, setProfile] = useState<AppProfile | null>(null);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [rounds, setRounds] = useState<Round[]>([]);
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
-  const [isLoadingRounds, setIsLoadingRounds] = useState(true);
-  const [roundsError, setRoundsError] = useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const showSecureContextWarning =
     typeof window !== 'undefined' && !window.isSecureContext;
 
   useEffect(() => {
+    if (supabaseConfigError) {
+      setIsAuthLoading(false);
+      return;
+    }
+
     let isActive = true;
 
-    const loadPersistedRounds = async () => {
-      setIsLoadingRounds(true);
-      setRoundsError(null);
-
+    const loadCurrentSession = async () => {
       try {
-        const nextRounds = await listRounds();
+        const session = await getSession();
 
         if (!isActive) {
           return;
         }
 
-        setRounds(nextRounds);
+        setCurrentUserId(session?.user.id ?? null);
       } catch (error) {
         if (!isActive) {
           return;
         }
 
-        setRoundsError(
-          error instanceof Error ? error.message : 'Unable to load rounds from Supabase.',
+        setLoadError(
+          error instanceof Error ? error.message : 'Unable to load the current session.',
         );
       } finally {
         if (isActive) {
-          setIsLoadingRounds(false);
+          setIsAuthLoading(false);
         }
       }
     };
 
-    void loadPersistedRounds();
+    void loadCurrentSession();
+
+    const subscription = subscribeToAuthChanges((_event, session) => {
+      setCurrentUserId(session?.user.id ?? null);
+      setSignOutError(null);
+    });
 
     return () => {
       isActive = false;
+      subscription.unsubscribe();
     };
   }, []);
+
+  const refreshAppData = async () => {
+    if (!currentUserId) {
+      setProfile(null);
+      setFriends([]);
+      setRequests([]);
+      setRounds([]);
+      setSelectedRoundId(null);
+      return;
+    }
+
+    setIsLoadingData(true);
+    setLoadError(null);
+
+    try {
+      const [nextProfile, nextFriends, nextRequests, nextRounds] = await Promise.all([
+        getMyProfile(),
+        listFriends(currentUserId),
+        listFriendRequests(currentUserId),
+        listRounds(),
+      ]);
+
+      setProfile(nextProfile);
+      setFriends(nextFriends);
+      setRequests(nextRequests);
+      setRounds(nextRounds);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : 'Unable to load data from Supabase.',
+      );
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setProfile(null);
+      setFriends([]);
+      setRequests([]);
+      setRounds([]);
+      setSelectedRoundId(null);
+      setView('friends');
+      return;
+    }
+
+    void refreshAppData();
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (selectedRoundId && !rounds.some((round) => round.id === selectedRoundId)) {
+      setSelectedRoundId(null);
+
+      if (view === 'play') {
+        setView('inbox');
+      }
+    }
+  }, [rounds, selectedRoundId, view]);
 
   const selectedRound = useMemo(
     () => rounds.find((round) => round.id === selectedRoundId) ?? null,
     [rounds, selectedRoundId],
+  );
+
+  const pendingIncomingCount = useMemo(
+    () => requests.filter((request) => request.direction === 'incoming').length,
+    [requests],
   );
 
   const handleCreateRound = (round: Round) => {
@@ -75,52 +165,67 @@ function App() {
     );
   };
 
+  const handleSignOut = async () => {
+    setSignOutError(null);
+
+    try {
+      await signOut();
+      setView('friends');
+    } catch (error) {
+      setSignOutError(error instanceof Error ? error.message : 'Unable to sign out.');
+    }
+  };
+
   return (
     <main className="app-shell">
       <section className="hero">
         <div className="hero-card">
-          <h1>BackTalk</h1>
-          <p>
-            One player records a phrase. The app reverses it. The second player imitates the
-            reversed sound, then hears that imitation flipped back and tries to guess the phrase.
-          </p>
+          <div className="hero-heading">
+            <div>
+              <h1>BackTalk</h1>
+              <p>
+                Record a phrase, reverse it, and send it to a friend. The recipient imitates the
+                reversed sound, hears the imitation flipped back, and tries to guess the phrase.
+              </p>
+            </div>
+            {profile ? (
+              <button
+                className="button ghost"
+                onClick={() => {
+                  void handleSignOut();
+                }}
+                type="button"
+              >
+                Sign out
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="hero-meta">
           <div className="meta-chip">
-            <strong>Supabase</strong>
-            <span>Rounds and recording URLs load from the shared backend inbox.</span>
+            <strong>Auth</strong>
+            <span>
+              {profile ? `Logged in as ${profile.email}.` : 'Email/password login is required.'}
+            </span>
           </div>
           <div className="meta-chip">
-            <strong>Storage</strong>
-            <span>Prompt and attempt recordings are stored in the `audio` bucket.</span>
+            <strong>Friends</strong>
+            <span>
+              {profile
+                ? `${friends.length} confirmed friend${friends.length === 1 ? '' : 's'} and ${pendingIncomingCount} incoming request${pendingIncomingCount === 1 ? '' : 's'}.`
+                : 'Add people by email and wait for them to accept your request.'}
+            </span>
+          </div>
+          <div className="meta-chip">
+            <strong>Privacy</strong>
+            <span>
+              {profile
+                ? 'Rounds and audio are scoped to the sender and recipient with Supabase RLS.'
+                : 'The app uses Supabase Auth plus row-level security for private rounds.'}
+            </span>
           </div>
         </div>
       </section>
-
-      <nav className="nav-row" aria-label="Primary">
-        <button
-          className={view === 'create' ? 'active' : undefined}
-          onClick={() => setView('create')}
-          type="button"
-        >
-          Create Round
-        </button>
-        <button
-          className={view === 'inbox' ? 'active' : undefined}
-          onClick={() => setView('inbox')}
-          type="button"
-        >
-          Inbox ({rounds.length})
-        </button>
-        <button
-          className={view === 'play' ? 'active' : undefined}
-          disabled={!selectedRound}
-          onClick={() => setView('play')}
-          type="button"
-        >
-          Play Round
-        </button>
-      </nav>
 
       {showSecureContextWarning ? (
         <div className="error-banner">
@@ -130,24 +235,83 @@ function App() {
         </div>
       ) : null}
 
-      {roundsError ? <div className="error-banner">{roundsError}</div> : null}
-      {isLoadingRounds ? (
-        <div className="info-banner">Loading rounds from Supabase...</div>
-      ) : null}
+      {signOutError ? <div className="error-banner">{signOutError}</div> : null}
+      {loadError ? <div className="error-banner">{loadError}</div> : null}
 
-      <div className="stack">
-        {view === 'create' ? <CreateRoundPanel onCreateRound={handleCreateRound} /> : null}
-        {view === 'inbox' ? (
-          <InboxPanel
-            rounds={rounds}
-            selectedRoundId={selectedRoundId}
-            onSelectRound={handleSelectRound}
-          />
-        ) : null}
-        {view === 'play' ? (
-          <PlayRoundPanel round={selectedRound} onUpdateRound={handleUpdateRound} />
-        ) : null}
-      </div>
+      {isAuthLoading ? (
+        <div className="info-banner">Checking your Supabase session...</div>
+      ) : !currentUserId ? (
+        <div className="stack">
+          <AuthPanel />
+        </div>
+      ) : (
+        <>
+          <nav className="nav-row" aria-label="Primary">
+            <button
+              className={view === 'friends' ? 'active' : undefined}
+              onClick={() => setView('friends')}
+              type="button"
+            >
+              Friends ({friends.length})
+            </button>
+            <button
+              className={view === 'create' ? 'active' : undefined}
+              onClick={() => setView('create')}
+              type="button"
+            >
+              Create Round
+            </button>
+            <button
+              className={view === 'inbox' ? 'active' : undefined}
+              onClick={() => setView('inbox')}
+              type="button"
+            >
+              My Rounds ({rounds.length})
+            </button>
+            <button
+              className={view === 'play' ? 'active' : undefined}
+              disabled={!selectedRound}
+              onClick={() => setView('play')}
+              type="button"
+            >
+              Play Round
+            </button>
+          </nav>
+
+          {isLoadingData ? (
+            <div className="info-banner">Loading your private rounds and friend graph...</div>
+          ) : null}
+
+          <div className="stack">
+            {view === 'friends' && profile ? (
+              <FriendsPanel friends={friends} onRefresh={refreshAppData} requests={requests} />
+            ) : null}
+            {view === 'create' && profile ? (
+              <CreateRoundPanel
+                currentUserEmail={profile.email}
+                currentUserId={profile.id}
+                friends={friends}
+                onCreateRound={handleCreateRound}
+              />
+            ) : null}
+            {view === 'inbox' && currentUserId ? (
+              <InboxPanel
+                currentUserId={currentUserId}
+                rounds={rounds}
+                selectedRoundId={selectedRoundId}
+                onSelectRound={handleSelectRound}
+              />
+            ) : null}
+            {view === 'play' && currentUserId ? (
+              <PlayRoundPanel
+                currentUserId={currentUserId}
+                round={selectedRound}
+                onUpdateRound={handleUpdateRound}
+              />
+            ) : null}
+          </div>
+        </>
+      )}
     </main>
   );
 }

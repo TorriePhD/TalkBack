@@ -12,8 +12,9 @@ export const supabase: SupabaseClient | null =
   supabaseConfigError === null
     ? createClient(supabaseUrl!, supabaseAnonKey!, {
         auth: {
-          persistSession: false,
-          autoRefreshToken: false,
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
         },
       })
     : null;

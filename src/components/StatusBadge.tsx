@@ -5,7 +5,6 @@ interface StatusBadgeProps {
 }
 
 const STATUS_LABELS: Record<RoundStatus, string> = {
-  created: 'Created',
   waiting_for_attempt: 'Waiting for attempt',
   attempted: 'Attempted',
   complete: 'Complete',

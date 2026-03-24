@@ -5,7 +5,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
 export const supabaseConfigError =
   !supabaseUrl || !supabaseAnonKey
-    ? 'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Uploads are disabled until those env vars are set.'
+    ? 'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Supabase-backed rounds are disabled until those env vars are set.'
     : null;
 
 export const supabase: SupabaseClient | null =

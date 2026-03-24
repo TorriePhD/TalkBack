@@ -3,9 +3,8 @@ import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import { StatusBadge } from '../../../components/StatusBadge';
-import { uploadAudio } from '../../../lib/storage/uploadAudio';
+import { saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
 import type { Round } from '../types';
-import { scoreGuess } from '../utils';
 
 interface PlayRoundPanelProps {
   round: Round | null;
@@ -17,27 +16,102 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
   const [guess, setGuess] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [isReversingAttempt, setIsReversingAttempt] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const lastAutoReversedAttemptBlobRef = useRef<Blob | null>(null);
+  const [isSavingAttempt, setIsSavingAttempt] = useState(false);
+  const [isSubmittingGuess, setIsSubmittingGuess] = useState(false);
+  const lastSavedAttemptBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     setGuess(round?.guess ?? '');
     setError(null);
     setInfo(null);
     recorder.clearRecording();
-    lastAutoReversedAttemptBlobRef.current = null;
+    lastSavedAttemptBlobRef.current = null;
   }, [round?.id, recorder.clearRecording]);
 
-  const hasAttempt = Boolean(round?.attemptAudioBlob && round.attemptReversedBlob);
+  const hasAttempt = Boolean(
+    round &&
+      (round.attemptAudioBlob || round.attemptAudioUrl) &&
+      (round.attemptReversedBlob || round.attemptReversedUrl),
+  );
+
   const canSubmitGuess = useMemo(
     () =>
       Boolean(round && hasAttempt && guess.trim()) &&
       round?.status !== 'complete' &&
-      !isUploading &&
-      !isReversingAttempt,
-    [guess, hasAttempt, isReversingAttempt, isUploading, round],
+      !isSavingAttempt &&
+      !isSubmittingGuess,
+    [guess, hasAttempt, isSavingAttempt, isSubmittingGuess, round],
   );
+
+  const saveAttempt = async (
+    currentRound: Round,
+    attemptBlob: Blob,
+    options: { cancelled?: () => boolean } = {},
+  ) => {
+    const { cancelled } = options;
+
+    setError(null);
+    setInfo(null);
+    setIsSavingAttempt(true);
+
+    try {
+      const reversedAttemptBlob = await reverseAudioBlob(attemptBlob);
+      if (cancelled?.()) {
+        return;
+      }
+
+      const savedRound = await saveRoundAttempt({
+        roundId: currentRound.id,
+        attemptAudioBlob: attemptBlob,
+        attemptReversedBlob: reversedAttemptBlob,
+      });
+      if (cancelled?.()) {
+        return;
+      }
+
+      onUpdateRound(currentRound.id, (existingRound) => ({
+        ...savedRound,
+        originalAudioBlob: existingRound.originalAudioBlob,
+        reversedAudioBlob: existingRound.reversedAudioBlob,
+        attemptAudioBlob: attemptBlob,
+        attemptReversedBlob: reversedAttemptBlob,
+      }));
+      lastSavedAttemptBlobRef.current = attemptBlob;
+      setInfo('Attempt recorded, reversed, and saved to Supabase.');
+    } catch (caughtError) {
+      if (!cancelled?.()) {
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : 'Unable to reverse and save the attempt recording.',
+        );
+      }
+    } finally {
+      if (!cancelled?.()) {
+        setIsSavingAttempt(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!round || !recorder.audioBlob || recorder.isRecording || round.status === 'complete') {
+      return;
+    }
+
+    const attemptBlob = recorder.audioBlob;
+
+    if (lastSavedAttemptBlobRef.current === attemptBlob) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void saveAttempt(round, attemptBlob, { cancelled: () => cancelled });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onUpdateRound, recorder.audioBlob, recorder.isRecording, round]);
 
   if (!round) {
     return (
@@ -49,105 +123,46 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
     );
   }
 
-  useEffect(() => {
-    if (!round || !recorder.audioBlob || recorder.isRecording || round.status === 'complete') {
+  const handleSaveAttempt = async () => {
+    if (!recorder.audioBlob || round.status === 'complete') {
       return;
     }
 
-    const attemptBlob = recorder.audioBlob;
-
-    if (lastAutoReversedAttemptBlobRef.current === attemptBlob) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const autoReverseAttempt = async () => {
-      setIsReversingAttempt(true);
-      setError(null);
-      setInfo(null);
-
-      try {
-        const reversedAttemptBlob = await reverseAudioBlob(attemptBlob);
-        if (cancelled) {
-          return;
-        }
-
-        onUpdateRound(round.id, (currentRound) => ({
-          ...currentRound,
-          attemptAudioBlob: attemptBlob,
-          attemptReversedBlob: reversedAttemptBlob,
-          attemptAudioUrl: null,
-          attemptReversedUrl: null,
-          score: currentRound.status === 'complete' ? currentRound.score : null,
-          status: 'attempted',
-        }));
-        lastAutoReversedAttemptBlobRef.current = attemptBlob;
-        setInfo('Attempt recorded and reversed automatically. Player 2 can now submit a guess.');
-      } catch (caughtError) {
-        if (!cancelled) {
-          setError(
-            caughtError instanceof Error
-              ? caughtError.message
-              : 'Unable to reverse the attempt recording.',
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setIsReversingAttempt(false);
-        }
-      }
-    };
-
-    void autoReverseAttempt();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [onUpdateRound, recorder.audioBlob, recorder.isRecording, round]);
-
-  const handleUpload = async () => {
-    if (!round.attemptAudioBlob || !round.attemptReversedBlob) {
-      return;
-    }
-
-    setError(null);
-    setInfo(null);
-    setIsUploading(true);
-
-    try {
-      const [attemptAudioUrl, attemptReversedUrl] = await Promise.all([
-        uploadAudio(round.attemptAudioBlob, 'attempt'),
-        uploadAudio(round.attemptReversedBlob, 'attempt-reversed'),
-      ]);
-
-      onUpdateRound(round.id, (currentRound) => ({
-        ...currentRound,
-        attemptAudioUrl,
-        attemptReversedUrl,
-      }));
-      setInfo('Attempt audio uploaded to Supabase Storage.');
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Upload failed.');
-    } finally {
-      setIsUploading(false);
-    }
+    await saveAttempt(round, recorder.audioBlob);
   };
 
-  const handleSubmitGuess = () => {
+  const handleSubmitGuess = async () => {
     const nextGuess = guess.trim();
     if (!nextGuess) {
       return;
     }
 
-    const score = scoreGuess(nextGuess, round.correctPhrase);
-    onUpdateRound(round.id, (currentRound) => ({
-      ...currentRound,
-      guess: nextGuess,
-      score,
-      status: 'complete',
-    }));
-    setInfo(score === 10 ? 'Exact match. Full score.' : 'Round complete. No exact match.');
+    setError(null);
+    setInfo(null);
+    setIsSubmittingGuess(true);
+
+    try {
+      const updatedRound = await submitRoundGuess({
+        roundId: round.id,
+        guess: nextGuess,
+        correctPhrase: round.correctPhrase,
+      });
+
+      onUpdateRound(round.id, (currentRound) => ({
+        ...updatedRound,
+        originalAudioBlob: currentRound.originalAudioBlob,
+        reversedAudioBlob: currentRound.reversedAudioBlob,
+        attemptAudioBlob: currentRound.attemptAudioBlob,
+        attemptReversedBlob: currentRound.attemptReversedBlob,
+      }));
+      setInfo(updatedRound.score === 10 ? 'Exact match. Full score.' : 'Round complete. No exact match.');
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error ? caughtError.message : 'Unable to submit the guess.',
+      );
+    } finally {
+      setIsSubmittingGuess(false);
+    }
   };
 
   return (
@@ -203,7 +218,7 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
             <div className="section-header">
               <div>
                 <h3>Record Attempt</h3>
-                <p>Capture a new imitation. It will be reversed automatically for playback.</p>
+                <p>Capture a new imitation. It will be reversed automatically and saved to Supabase.</p>
               </div>
             </div>
 
@@ -216,7 +231,7 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
                 }}
                 type="button"
               >
-                {recorder.isPreparing ? 'Requesting mic…' : 'Start attempt'}
+                {recorder.isPreparing ? 'Requesting mic...' : 'Start attempt'}
               </button>
               <button
                 className="button warning"
@@ -226,16 +241,31 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
               >
                 Stop attempt
               </button>
+              <button
+                className="button secondary"
+                disabled={
+                  !recorder.audioBlob ||
+                  isSavingAttempt ||
+                  isSubmittingGuess ||
+                  round.status === 'complete'
+                }
+                onClick={() => {
+                  void handleSaveAttempt();
+                }}
+                type="button"
+              >
+                {isSavingAttempt ? 'Saving attempt...' : 'Reverse + save attempt'}
+              </button>
             </div>
 
             <div className="helper-text">
               {recorder.isRecording
                 ? 'Attempt recording in progress.'
-                : isReversingAttempt
-                  ? 'Auto-reversing your latest attempt…'
+                : isSavingAttempt
+                  ? 'Auto-reversing and saving your latest attempt...'
                   : recorder.audioBlob
-                    ? 'A fresh attempt is ready.'
-                  : 'Listen to the reversed prompt, then record a reply.'}
+                    ? 'A fresh attempt is ready. You can retry saving it if needed.'
+                    : 'Listen to the reversed prompt, then record a reply.'}
             </div>
           </div>
 
@@ -243,7 +273,7 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
             <div className="section-header">
               <div>
                 <h3>Guess + Score</h3>
-                <p>Score is based on Wasserstein edit distance, normalized to 10 points.</p>
+                <p>Score is based on Wasserstein edit distance, normalized to a 10-point scale.</p>
               </div>
             </div>
 
@@ -253,29 +283,21 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
                 id="guess"
                 value={guess}
                 onChange={(event) => setGuess(event.target.value)}
-                disabled={round.status === 'complete'}
+                disabled={round.status === 'complete' || isSubmittingGuess}
                 placeholder="What did Player 1 actually say?"
               />
             </div>
 
             <div className="button-row">
               <button
-                className="button secondary"
-                disabled={!hasAttempt || isUploading}
+                className="button primary"
+                disabled={!canSubmitGuess}
                 onClick={() => {
-                  void handleUpload();
+                  void handleSubmitGuess();
                 }}
                 type="button"
               >
-                {isUploading ? 'Uploading…' : 'Upload attempt + reversed'}
-              </button>
-              <button
-                className="button primary"
-                disabled={!canSubmitGuess}
-                onClick={handleSubmitGuess}
-                type="button"
-              >
-                Submit guess
+                {isSubmittingGuess ? 'Submitting guess...' : 'Submit guess'}
               </button>
             </div>
           </div>

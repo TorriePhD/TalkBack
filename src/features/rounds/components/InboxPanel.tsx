@@ -17,13 +17,14 @@ export function InboxPanel({
       <div className="section-header">
         <div>
           <h2>Inbox</h2>
-          <p>Locally created rounds wait here until Player 2 opens one and records an attempt.</p>
+          <p>Rounds saved to Supabase wait here until Player 2 opens one and records an attempt.</p>
         </div>
       </div>
 
       {rounds.length === 0 ? (
         <div className="empty-state">
-          Create a round first. New rounds stay in frontend React state only for this phase.
+          No saved rounds yet. Create one and it will appear here for any client using this
+          Supabase project.
         </div>
       ) : (
         <div className="round-list">

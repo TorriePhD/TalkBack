@@ -1,7 +1,7 @@
 # TalkBack Phase 1
 
 
-Frontend-only Vite + React + TypeScript prototype for the reversed-audio party game. Round and game state stay in React state only for this phase. Supabase is prepared for Storage uploads only.
+Vite + React + TypeScript prototype for the reversed-audio party game. Rounds now persist in Supabase, and recordings are stored in the `audio` bucket so prompts and attempts can be retrieved after refresh or from another device.
 
 ## Run
 
@@ -18,7 +18,11 @@ Frontend-only Vite + React + TypeScript prototype for the reversed-audio party g
    VITE_SUPABASE_ANON_KEY=your-anon-key
    ```
 
-3. Create a Supabase Storage bucket named `audio` if you want uploads enabled. The app still runs without env vars, but upload actions will show a clear error.
+3. Apply the Supabase migration in [`supabase/migrations/20260324144708_remote_schema.sql`](./supabase/migrations/20260324144708_remote_schema.sql). This creates the `rounds` table, the public `audio` bucket, and the policies the client uses.
+
+   ```bash
+   supabase db push
+   ```
 
 4. Start the dev server on your LAN:
 

@@ -2,17 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
-import { uploadAudio } from '../../../lib/storage/uploadAudio';
+import { createRoundRecord } from '../../../lib/rounds';
 import type { Round } from '../types';
 
 interface CreateRoundPanelProps {
   onCreateRound: (round: Round) => void;
-}
-
-function makeRoundId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `round-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
@@ -22,19 +16,15 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
   const [correctPhrase, setCorrectPhrase] = useState('');
   const [reversedAudioBlob, setReversedAudioBlob] = useState<Blob | null>(null);
   const [reverseError, setReverseError] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [originalAudioUrl, setOriginalAudioUrl] = useState<string | null>(null);
-  const [reversedAudioUrl, setReversedAudioUrl] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isReversing, setIsReversing] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const lastAutoReversedBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     setReversedAudioBlob(null);
     setReverseError(null);
-    setUploadError(null);
-    setOriginalAudioUrl(null);
-    setReversedAudioUrl(null);
+    setSaveError(null);
     lastAutoReversedBlobRef.current = null;
   }, [recorder.audioBlob, recorder.isRecording]);
 
@@ -93,11 +83,13 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
           reversedAudioBlob,
       ) &&
       !isReversing &&
+      !isSaving &&
       !recorder.isRecording &&
       !recorder.isPreparing,
     [
       correctPhrase,
       isReversing,
+      isSaving,
       player1Name,
       player2Name,
       recorder.audioBlob,
@@ -107,26 +99,25 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
     ],
   );
 
-  const handleUpload = async () => {
-    if (!recorder.audioBlob || !reversedAudioBlob) {
+  const handleReverseOriginal = async () => {
+    if (!recorder.audioBlob) {
       return;
     }
 
-    setUploadError(null);
-    setIsUploading(true);
+    setReverseError(null);
+    setSaveError(null);
+    setIsReversing(true);
 
     try {
-      const [uploadedOriginalUrl, uploadedReversedUrl] = await Promise.all([
-        uploadAudio(recorder.audioBlob, 'original'),
-        uploadAudio(reversedAudioBlob, 'reversed'),
-      ]);
-
-      setOriginalAudioUrl(uploadedOriginalUrl);
-      setReversedAudioUrl(uploadedReversedUrl);
+      const nextReversedAudio = await reverseAudioBlob(recorder.audioBlob);
+      setReversedAudioBlob(nextReversedAudio);
+      lastAutoReversedBlobRef.current = recorder.audioBlob;
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Upload failed.');
+      setReverseError(
+        error instanceof Error ? error.message : 'Unable to reverse the original audio.',
+      );
     } finally {
-      setIsUploading(false);
+      setIsReversing(false);
     }
   };
 
@@ -136,37 +127,35 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
     setCorrectPhrase('');
     setReversedAudioBlob(null);
     setReverseError(null);
-    setUploadError(null);
-    setOriginalAudioUrl(null);
-    setReversedAudioUrl(null);
+    setSaveError(null);
+    lastAutoReversedBlobRef.current = null;
     recorder.clearRecording();
   };
 
-  const handleCreateRound = () => {
+  const handleCreateRound = async () => {
     if (!recorder.audioBlob || !reversedAudioBlob) {
       return;
     }
 
-    onCreateRound({
-      id: makeRoundId(),
-      createdAt: new Date().toISOString(),
-      player1Name: player1Name.trim(),
-      player2Name: player2Name.trim(),
-      correctPhrase: correctPhrase.trim(),
-      originalAudioBlob: recorder.audioBlob,
-      reversedAudioBlob,
-      originalAudioUrl,
-      reversedAudioUrl,
-      guess: '',
-      attemptAudioBlob: null,
-      attemptReversedBlob: null,
-      attemptAudioUrl: null,
-      attemptReversedUrl: null,
-      score: null,
-      status: 'waiting_for_attempt',
-    });
+    setSaveError(null);
+    setIsSaving(true);
 
-    resetForm();
+    try {
+      const nextRound = await createRoundRecord({
+        player1Name: player1Name.trim(),
+        player2Name: player2Name.trim(),
+        correctPhrase: correctPhrase.trim(),
+        originalAudioBlob: recorder.audioBlob,
+        reversedAudioBlob,
+      });
+
+      onCreateRound(nextRound);
+      resetForm();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Unable to create the round.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -174,7 +163,7 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
       <div className="section-header">
         <div>
           <h2>Create Round</h2>
-          <p>Record the original phrase, reverse it, and stage a new round for Player 2.</p>
+          <p>Record the original phrase, reverse it, and save the round to Supabase.</p>
         </div>
       </div>
 
@@ -231,7 +220,7 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
                 }}
                 type="button"
               >
-                {recorder.isPreparing ? 'Requesting mic…' : 'Start recording'}
+                {recorder.isPreparing ? 'Requesting mic...' : 'Start recording'}
               </button>
               <button
                 className="button warning"
@@ -262,10 +251,7 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
 
           {recorder.error ? <div className="error-banner">{recorder.error}</div> : null}
           {reverseError ? <div className="error-banner">{reverseError}</div> : null}
-          {uploadError ? <div className="error-banner">{uploadError}</div> : null}
-          {originalAudioUrl || reversedAudioUrl ? (
-            <div className="success-banner">Supabase Storage upload complete for the current draft.</div>
-          ) : null}
+          {saveError ? <div className="error-banner">{saveError}</div> : null}
         </div>
 
         <div className="stack">
@@ -274,41 +260,42 @@ export function CreateRoundPanel({ onCreateRound }: CreateRoundPanelProps) {
               title="Original Phrase"
               description="This is the clean Player 1 recording."
               blob={recorder.audioBlob}
-              remoteUrl={originalAudioUrl}
             />
             <AudioPlayerCard
               title="Reversed Phrase"
               description="This is the version Player 2 should imitate."
               blob={reversedAudioBlob}
-              remoteUrl={reversedAudioUrl}
             />
           </div>
 
           <div className="button-row">
             <button
               className="button secondary"
-              disabled={!recorder.audioBlob || !reversedAudioBlob || isUploading}
+              disabled={!recorder.audioBlob || isReversing || recorder.isRecording || isSaving}
               onClick={() => {
-                void handleUpload();
+                void handleReverseOriginal();
               }}
               type="button"
             >
-              {isUploading ? 'Uploading…' : 'Upload original + reversed'}
+              {isReversing ? 'Reversing...' : 'Reverse original audio'}
             </button>
             <button
               className="button primary"
               disabled={!canCreateRound}
-              onClick={handleCreateRound}
+              onClick={() => {
+                void handleCreateRound();
+              }}
               type="button"
             >
-              Create local round
+              {isSaving ? 'Creating round...' : 'Create shared round'}
             </button>
           </div>
+
           <div className="helper-text">
             {isReversing
-              ? 'Auto-reversing the latest recording…'
+              ? 'Auto-reversing the latest recording...'
               : reversedAudioBlob
-                ? 'Recording complete. Reversed audio is ready.'
+                ? 'Reversed audio is ready. Creating the round uploads both clips to Supabase and adds the round to the shared inbox.'
                 : 'Stop recording to automatically generate the reversed clip.'}
           </div>
         </div>

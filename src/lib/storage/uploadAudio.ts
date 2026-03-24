@@ -11,7 +11,6 @@ interface UploadAudioOptions {
 
 export interface UploadedAudioAsset {
   path: string;
-  url: string;
 }
 
 function sanitizePathSegment(value: string) {
@@ -72,11 +71,5 @@ export async function uploadAudio(
     throw new Error(`Upload failed: ${error.message}`);
   }
 
-  const url = await createSignedAudioUrl(path);
-
-  if (!url) {
-    throw new Error('The upload succeeded, but no public URL was returned.');
-  }
-
-  return { path, url };
+  return { path };
 }

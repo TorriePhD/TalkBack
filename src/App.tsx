@@ -79,7 +79,7 @@ function App() {
     <main className="app-shell">
       <section className="hero">
         <div className="hero-card">
-          <h1>TalkBack</h1>
+          <h1>BackTalk</h1>
           <p>
             One player records a phrase. The app reverses it. The second player imitates the
             reversed sound, then hears that imitation flipped back and tries to guess the phrase.

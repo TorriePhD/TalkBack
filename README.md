@@ -1,5 +1,6 @@
 # TalkBack Phase 1
 
+
 Frontend-only Vite + React + TypeScript prototype for the reversed-audio party game. Round and game state stay in React state only for this phase. Supabase is prepared for Storage uploads only.
 
 ## Run

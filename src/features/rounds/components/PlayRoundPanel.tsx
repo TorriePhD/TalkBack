@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
@@ -19,12 +19,14 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
   const [info, setInfo] = useState<string | null>(null);
   const [isReversingAttempt, setIsReversingAttempt] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const lastAutoReversedAttemptBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     setGuess(round?.guess ?? '');
     setError(null);
     setInfo(null);
     recorder.clearRecording();
+    lastAutoReversedAttemptBlobRef.current = null;
   }, [round?.id, recorder.clearRecording]);
 
   const hasAttempt = Boolean(round?.attemptAudioBlob && round.attemptReversedBlob);
@@ -47,37 +49,62 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
     );
   }
 
-  const handleReverseAttempt = async () => {
-    if (!recorder.audioBlob) {
+  useEffect(() => {
+    if (!round || !recorder.audioBlob || recorder.isRecording || round.status === 'complete') {
       return;
     }
 
-    setError(null);
-    setInfo(null);
-    setIsReversingAttempt(true);
+    const attemptBlob = recorder.audioBlob;
 
-    try {
-      const reversedAttemptBlob = await reverseAudioBlob(recorder.audioBlob);
-      onUpdateRound(round.id, (currentRound) => ({
-        ...currentRound,
-        attemptAudioBlob: recorder.audioBlob,
-        attemptReversedBlob: reversedAttemptBlob,
-        attemptAudioUrl: null,
-        attemptReversedUrl: null,
-        score: currentRound.status === 'complete' ? currentRound.score : null,
-        status: 'attempted',
-      }));
-      setInfo('Attempt recorded and reversed. Player 2 can now submit a guess.');
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : 'Unable to reverse the attempt recording.',
-      );
-    } finally {
-      setIsReversingAttempt(false);
+    if (lastAutoReversedAttemptBlobRef.current === attemptBlob) {
+      return;
     }
-  };
+
+    let cancelled = false;
+
+    const autoReverseAttempt = async () => {
+      setIsReversingAttempt(true);
+      setError(null);
+      setInfo(null);
+
+      try {
+        const reversedAttemptBlob = await reverseAudioBlob(attemptBlob);
+        if (cancelled) {
+          return;
+        }
+
+        onUpdateRound(round.id, (currentRound) => ({
+          ...currentRound,
+          attemptAudioBlob: attemptBlob,
+          attemptReversedBlob: reversedAttemptBlob,
+          attemptAudioUrl: null,
+          attemptReversedUrl: null,
+          score: currentRound.status === 'complete' ? currentRound.score : null,
+          status: 'attempted',
+        }));
+        lastAutoReversedAttemptBlobRef.current = attemptBlob;
+        setInfo('Attempt recorded and reversed automatically. Player 2 can now submit a guess.');
+      } catch (caughtError) {
+        if (!cancelled) {
+          setError(
+            caughtError instanceof Error
+              ? caughtError.message
+              : 'Unable to reverse the attempt recording.',
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsReversingAttempt(false);
+        }
+      }
+    };
+
+    void autoReverseAttempt();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onUpdateRound, recorder.audioBlob, recorder.isRecording, round]);
 
   const handleUpload = async () => {
     if (!round.attemptAudioBlob || !round.attemptReversedBlob) {
@@ -176,7 +203,7 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
             <div className="section-header">
               <div>
                 <h3>Record Attempt</h3>
-                <p>Capture a new imitation, then reverse that attempt back for playback.</p>
+                <p>Capture a new imitation. It will be reversed automatically for playback.</p>
               </div>
             </div>
 
@@ -199,23 +226,15 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
               >
                 Stop attempt
               </button>
-              <button
-                className="button secondary"
-                disabled={!recorder.audioBlob || isReversingAttempt || round.status === 'complete'}
-                onClick={() => {
-                  void handleReverseAttempt();
-                }}
-                type="button"
-              >
-                {isReversingAttempt ? 'Reversing…' : 'Reverse attempt'}
-              </button>
             </div>
 
             <div className="helper-text">
               {recorder.isRecording
                 ? 'Attempt recording in progress.'
-                : recorder.audioBlob
-                  ? 'A fresh attempt is ready to reverse.'
+                : isReversingAttempt
+                  ? 'Auto-reversing your latest attempt…'
+                  : recorder.audioBlob
+                    ? 'A fresh attempt is ready.'
                   : 'Listen to the reversed prompt, then record a reply.'}
             </div>
           </div>
@@ -224,7 +243,7 @@ export function PlayRoundPanel({ round, onUpdateRound }: PlayRoundPanelProps) {
             <div className="section-header">
               <div>
                 <h3>Guess + Score</h3>
-                <p>Exact match after trimming and case-folding scores 10 points.</p>
+                <p>Score is based on Wasserstein edit distance, normalized to 10 points.</p>
               </div>
             </div>
 

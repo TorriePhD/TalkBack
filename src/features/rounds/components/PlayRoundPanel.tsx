@@ -36,6 +36,7 @@ export function PlayRoundPanel({
   const [isSavingAttempt, setIsSavingAttempt] = useState(false);
   const [isSubmittingGuess, setIsSubmittingGuess] = useState(false);
   const lastSavedAttemptBlobRef = useRef<Blob | null>(null);
+  const lastPreviewedAttemptBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     setGuess(round?.guess ?? '');
@@ -43,9 +44,11 @@ export function PlayRoundPanel({
     setInfo(null);
     recorder.clearRecording();
     lastSavedAttemptBlobRef.current = null;
+    lastPreviewedAttemptBlobRef.current = null;
   }, [round?.id, recorder.clearRecording]);
 
   const isRecipient = Boolean(round && round.recipientId === currentUserId);
+  const canSenderHearReversedPrompt = Boolean(round && (isRecipient || round.status === 'complete'));
   const showOriginalReference = Boolean(round && (!isRecipient || round.status === 'complete'));
   const hasAttempt = Boolean(
     round &&
@@ -143,6 +146,30 @@ export function PlayRoundPanel({
     };
   }, [currentUserId, isRecipient, onUpdateRound, recorder.audioBlob, recorder.isRecording, round]);
 
+  useEffect(() => {
+    if (!isRecipient || !recorder.audioBlob || recorder.isRecording) {
+      return;
+    }
+
+    if (lastPreviewedAttemptBlobRef.current === recorder.audioBlob) {
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(recorder.audioBlob);
+    const previewAudio = new Audio(previewUrl);
+    const timeoutId = window.setTimeout(() => {
+      void previewAudio.play().catch(() => undefined);
+    }, 1000);
+
+    lastPreviewedAttemptBlobRef.current = recorder.audioBlob;
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      previewAudio.pause();
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [isRecipient, recorder.audioBlob, recorder.isRecording]);
+
   if (!round) {
     return (
       <section className="surface">
@@ -152,14 +179,6 @@ export function PlayRoundPanel({
       </section>
     );
   }
-
-  const handleSaveAttempt = async () => {
-    if (!recorder.audioBlob || round.status === 'complete' || !isRecipient) {
-      return;
-    }
-
-    await saveAttempt(round, recorder.audioBlob);
-  };
 
   const handleSubmitGuess = async () => {
     const nextGuess = guess.trim();
@@ -220,9 +239,13 @@ export function PlayRoundPanel({
           <div className="audio-grid">
             <AudioPlayerCard
               title="Reversed Prompt"
-              description="This is the backwards-sounding clip the recipient should imitate."
-              blob={round.reversedAudioBlob}
-              remoteUrl={round.reversedAudioUrl}
+              description={
+                canSenderHearReversedPrompt
+                  ? 'Use this clip for the attempt.'
+                  : 'Locked for sender until round is complete.'
+              }
+              blob={canSenderHearReversedPrompt ? round.reversedAudioBlob : null}
+              remoteUrl={canSenderHearReversedPrompt ? round.reversedAudioUrl : null}
             />
             <AudioPlayerCard
               title="Original Phrase"
@@ -266,35 +289,18 @@ export function PlayRoundPanel({
                     disabled={
                       recorder.isRecording || recorder.isPreparing || round.status === 'complete'
                     }
-                    onClick={() => {
+                    onPointerDown={() => {
                       void recorder.startRecording();
                     }}
+                    onPointerLeave={recorder.stopRecording}
+                    onPointerUp={recorder.stopRecording}
                     type="button"
                   >
-                    {recorder.isPreparing ? 'Requesting mic...' : 'Start attempt'}
-                  </button>
-                  <button
-                    className="button warning"
-                    disabled={!recorder.isRecording}
-                    onClick={recorder.stopRecording}
-                    type="button"
-                  >
-                    Stop attempt
-                  </button>
-                  <button
-                    className="button secondary"
-                    disabled={
-                      !recorder.audioBlob ||
-                      isSavingAttempt ||
-                      isSubmittingGuess ||
-                      round.status === 'complete'
-                    }
-                    onClick={() => {
-                      void handleSaveAttempt();
-                    }}
-                    type="button"
-                  >
-                    {isSavingAttempt ? 'Saving attempt...' : 'Reverse + save attempt'}
+                    {recorder.isPreparing
+                      ? 'Requesting mic...'
+                      : recorder.isRecording
+                        ? 'Recording... release to stop'
+                        : 'Hold to record attempt'}
                   </button>
                 </div>
 
@@ -304,7 +310,7 @@ export function PlayRoundPanel({
                     : isSavingAttempt
                       ? 'Auto-reversing and saving your latest attempt...'
                       : recorder.audioBlob
-                        ? 'A fresh attempt is ready. You can retry saving it if needed.'
+                        ? 'Recorded. Playback starts after one second.'
                         : 'Listen to the reversed prompt, then record a reply.'}
                 </div>
               </div>

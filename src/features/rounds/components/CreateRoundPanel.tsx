@@ -28,6 +28,7 @@ export function CreateRoundPanel({
   const [isReversing, setIsReversing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const lastAutoReversedBlobRef = useRef<Blob | null>(null);
+  const lastPreviewedBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     if (!friends.length) {
@@ -45,6 +46,30 @@ export function CreateRoundPanel({
     setReverseError(null);
     setSaveError(null);
     lastAutoReversedBlobRef.current = null;
+  }, [recorder.audioBlob, recorder.isRecording]);
+
+  useEffect(() => {
+    if (!recorder.audioBlob || recorder.isRecording) {
+      return;
+    }
+
+    if (lastPreviewedBlobRef.current === recorder.audioBlob) {
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(recorder.audioBlob);
+    const previewAudio = new Audio(previewUrl);
+    const timeoutId = window.setTimeout(() => {
+      void previewAudio.play().catch(() => undefined);
+    }, 1000);
+
+    lastPreviewedBlobRef.current = recorder.audioBlob;
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      previewAudio.pause();
+      URL.revokeObjectURL(previewUrl);
+    };
   }, [recorder.audioBlob, recorder.isRecording]);
 
   useEffect(() => {
@@ -116,34 +141,13 @@ export function CreateRoundPanel({
     ],
   );
 
-  const handleReverseOriginal = async () => {
-    if (!recorder.audioBlob) {
-      return;
-    }
-
-    setReverseError(null);
-    setSaveError(null);
-    setIsReversing(true);
-
-    try {
-      const nextReversedAudio = await reverseAudioBlob(recorder.audioBlob);
-      setReversedAudioBlob(nextReversedAudio);
-      lastAutoReversedBlobRef.current = recorder.audioBlob;
-    } catch (error) {
-      setReverseError(
-        error instanceof Error ? error.message : 'Unable to reverse the original audio.',
-      );
-    } finally {
-      setIsReversing(false);
-    }
-  };
-
   const resetForm = () => {
     setCorrectPhrase('');
     setReversedAudioBlob(null);
     setReverseError(null);
     setSaveError(null);
     lastAutoReversedBlobRef.current = null;
+    lastPreviewedBlobRef.current = null;
     recorder.clearRecording();
   };
 
@@ -231,10 +235,6 @@ export function CreateRoundPanel({
               placeholder="Type the phrase your friend will try to decode."
               value={correctPhrase}
             />
-            <div className="helper-text">
-              The phrase stays private to the round participants and scoring uses a normalized edit
-              distance on a 10-point scale.
-            </div>
           </div>
 
           <div className="surface nested-surface">
@@ -249,20 +249,18 @@ export function CreateRoundPanel({
               <button
                 className="button primary"
                 disabled={recorder.isRecording || recorder.isPreparing}
-                onClick={() => {
+                onPointerDown={() => {
                   void recorder.startRecording();
                 }}
+                onPointerLeave={recorder.stopRecording}
+                onPointerUp={recorder.stopRecording}
                 type="button"
               >
-                {recorder.isPreparing ? 'Requesting mic...' : 'Start recording'}
-              </button>
-              <button
-                className="button warning"
-                disabled={!recorder.isRecording}
-                onClick={recorder.stopRecording}
-                type="button"
-              >
-                Stop recording
+                {recorder.isPreparing
+                  ? 'Requesting mic...'
+                  : recorder.isRecording
+                    ? 'Recording... release to stop'
+                    : 'Hold to record'}
               </button>
               <button
                 className="button ghost"
@@ -274,13 +272,7 @@ export function CreateRoundPanel({
               </button>
             </div>
 
-            <div className="helper-text">
-              {recorder.isRecording
-                ? 'Recording in progress.'
-                : recorder.mimeType
-                  ? `Recorder format: ${recorder.mimeType}`
-                  : 'Ready to record.'}
-            </div>
+            <div className="helper-text">{recorder.mimeType ? `Format: ${recorder.mimeType}` : ''}</div>
           </div>
 
           {recorder.error ? <div className="error-banner">{recorder.error}</div> : null}
@@ -297,22 +289,12 @@ export function CreateRoundPanel({
             />
             <AudioPlayerCard
               title="Reversed Phrase"
-              description="This is what your friend will hear when the round arrives."
-              blob={reversedAudioBlob}
+              description="Locked for the sender until the round is complete."
+              blob={null}
             />
           </div>
 
           <div className="button-row">
-            <button
-              className="button secondary"
-              disabled={!recorder.audioBlob || isReversing || recorder.isRecording || isSaving}
-              onClick={() => {
-                void handleReverseOriginal();
-              }}
-              type="button"
-            >
-              {isReversing ? 'Reversing...' : 'Reverse original audio'}
-            </button>
             <button
               className="button primary"
               disabled={!canCreateRound}
@@ -329,8 +311,8 @@ export function CreateRoundPanel({
             {isReversing
               ? 'Auto-reversing the latest recording...'
               : reversedAudioBlob
-                ? `The reversed prompt is ready. Sending this round will upload both clips to private Supabase Storage and assign the round to ${selectedFriend?.email ?? 'your friend'}.`
-                : 'Stop recording to automatically generate the reversed clip.'}
+                ? `Ready to send to ${selectedFriend?.email ?? 'your friend'}.`
+                : 'Record and release to generate the reversed clip.'}
           </div>
         </div>
       </div>

@@ -143,11 +143,6 @@ function App() {
     [rounds, selectedRoundId],
   );
 
-  const pendingIncomingCount = useMemo(
-    () => requests.filter((request) => request.direction === 'incoming').length,
-    [requests],
-  );
-
   const handleCreateRound = (round: Round) => {
     setRounds((currentRounds) => [round, ...currentRounds]);
     setSelectedRoundId(round.id);
@@ -183,10 +178,7 @@ function App() {
           <div className="hero-heading">
             <div>
               <h1>BackTalk</h1>
-              <p>
-                Record a phrase, reverse it, and send it to a friend. The recipient imitates the
-                reversed sound, hears the imitation flipped back, and tries to guess the phrase.
-              </p>
+              <p>Send a reversed recording to a friend and play the round.</p>
             </div>
             {profile ? (
               <button
@@ -199,30 +191,6 @@ function App() {
                 Sign out
               </button>
             ) : null}
-          </div>
-        </div>
-        <div className="hero-meta">
-          <div className="meta-chip">
-            <strong>Auth</strong>
-            <span>
-              {profile ? `Logged in as ${profile.email}.` : 'Email/password login is required.'}
-            </span>
-          </div>
-          <div className="meta-chip">
-            <strong>Friends</strong>
-            <span>
-              {profile
-                ? `${friends.length} confirmed friend${friends.length === 1 ? '' : 's'} and ${pendingIncomingCount} incoming request${pendingIncomingCount === 1 ? '' : 's'}.`
-                : 'Add people by email and wait for them to accept your request.'}
-            </span>
-          </div>
-          <div className="meta-chip">
-            <strong>Privacy</strong>
-            <span>
-              {profile
-                ? 'Rounds and audio are scoped to the sender and recipient with Supabase RLS.'
-                : 'The app uses Supabase Auth plus row-level security for private rounds.'}
-            </span>
           </div>
         </div>
       </section>

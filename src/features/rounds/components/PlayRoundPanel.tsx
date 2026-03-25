@@ -463,10 +463,10 @@ export function PlayRoundPanel({
             {recipientStage === 'guess' ? (
               <div className="stack">
                 <AudioPlayerCard
-                  title="Saved take"
-                  description="Your imitation is locked in. Type the original phrase."
-                  blob={round.attemptAudioBlob}
-                  remoteUrl={round.attemptAudioUrl}
+                  title="Reversed take"
+                  description="Your imitation is locked in and flipped back. Type the original phrase."
+                  blob={round.attemptReversedBlob}
+                  remoteUrl={round.attemptReversedUrl}
                 />
 
                 <div className="field">

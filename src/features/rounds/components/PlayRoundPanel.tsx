@@ -256,6 +256,7 @@ export function PlayRoundPanel({
         attemptReversedBlob: reversedAttemptBlob,
       }));
       lastSavedAttemptBlobRef.current = attemptBlob;
+      recorder.clearRecording();
       setInfo('Take saved. Move on to your guess.');
     } catch (caughtError) {
       if (!cancelled?.()) {
@@ -382,7 +383,7 @@ export function PlayRoundPanel({
             </div>
 
             {recipientStage === 'listen' ? (
-              <div className="stack">
+              <div className="stack" key="recipient-stage-listen">
                 <AudioPlayerCard
                   title="Reversed prompt"
                   description="Replay this clip until you are ready to imitate it."
@@ -410,7 +411,7 @@ export function PlayRoundPanel({
             ) : null}
 
             {recipientStage === 'record' ? (
-              <div className="stack">
+              <div className="stack" key="recipient-stage-record">
                 <AudioPlayerCard
                   title="Replay the prompt"
                   description="Use this if you need another listen before recording."
@@ -461,7 +462,7 @@ export function PlayRoundPanel({
             ) : null}
 
             {recipientStage === 'guess' ? (
-              <div className="stack">
+              <div className="stack" key="recipient-stage-guess">
                 <AudioPlayerCard
                   title="Reversed take"
                   description="Your imitation is locked in and flipped back. Type the original phrase."
@@ -496,7 +497,7 @@ export function PlayRoundPanel({
             ) : null}
 
             {recipientStage === 'reveal' && scorePresentation ? (
-              <div className="stack">
+              <div className="stack" key="recipient-stage-reveal">
                 <div className="result-box">
                   <p className={`score-mark tone-${scorePresentation.tone}`}>
                     {scorePresentation.medalLabel}

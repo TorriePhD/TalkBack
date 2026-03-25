@@ -68,13 +68,11 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
 
   return (
     <section className="surface">
+      <div className="eyebrow">Crew</div>
       <div className="section-header">
         <div>
-          <h2>Friends</h2>
-          <p>
-            Add someone by email. Once they accept the request, they become an eligible round
-            recipient.
-          </p>
+          <h2>Invite your people</h2>
+          <p>Friends unlock round sending. Add someone by email, then wait for the link-up.</p>
         </div>
       </div>
 
@@ -82,8 +80,8 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
         <div className="surface nested-surface">
           <div className="section-header">
             <div>
-              <h3>Add Friend</h3>
-              <p>Both people need an account before a request can be sent.</p>
+              <h3>Add a friend</h3>
+              <p>Both people need an account before a request can go out.</p>
             </div>
           </div>
 
@@ -106,7 +104,7 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
               }}
               type="button"
             >
-              {isSending ? 'Sending...' : 'Send request'}
+              {isSending ? 'Sending...' : 'Send invite'}
             </button>
           </div>
         </div>
@@ -116,12 +114,12 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
             <div className="section-header compact-header">
               <div>
                 <h3>Incoming</h3>
-                <p>Accept these to unlock round sending.</p>
+                <p>Tap accept to unlock round sending.</p>
               </div>
             </div>
 
             {incomingRequests.length === 0 ? (
-              <div className="empty-state compact-empty">No incoming requests.</div>
+              <div className="empty-state compact-empty">No incoming invites right now.</div>
             ) : (
               <div className="stack mini-stack">
                 {incomingRequests.map((request) => (
@@ -164,12 +162,12 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
             <div className="section-header compact-header">
               <div>
                 <h3>Outgoing</h3>
-                <p>These are still waiting on the other person.</p>
+                <p>These invites are still waiting on the other person.</p>
               </div>
             </div>
 
             {outgoingRequests.length === 0 ? (
-              <div className="empty-state compact-empty">No outgoing requests.</div>
+              <div className="empty-state compact-empty">No outgoing invites yet.</div>
             ) : (
               <div className="stack mini-stack">
                 {outgoingRequests.map((request) => (
@@ -198,7 +196,7 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
 
           {friends.length === 0 ? (
             <div className="empty-state compact-empty">
-              No friends yet. Send a request, then wait for it to be accepted.
+              No friends yet. Send an invite and wait for the accept.
             </div>
           ) : (
             <div className="stack mini-stack">
@@ -210,7 +208,7 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
                       Friends since {new Date(friend.createdAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <span className="badge complete">Connected</span>
+                  <span className="badge complete">Locked in</span>
                 </div>
               ))}
             </div>

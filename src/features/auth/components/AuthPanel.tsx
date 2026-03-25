@@ -47,19 +47,23 @@ export function AuthPanel() {
 
   return (
     <section className="surface auth-shell">
+      <div className="eyebrow">BackTalk</div>
       <div className="section-header">
         <div>
-          <h2>Sign In</h2>
-          <p>
-            This app now uses Supabase Auth. Create an account with an email and password, then
-            only your own friendships and rounds will load.
-          </p>
+          <h2>Jump in and start the chaos</h2>
+          <p>Sign in with email to send a phrase, scramble a clip, and challenge a friend.</p>
         </div>
       </div>
 
       {supabaseConfigError ? <div className="error-banner">{supabaseConfigError}</div> : null}
 
       <div className="stack">
+        <div className="pill-row">
+          <span className="badge created">Private rounds</span>
+          <span className="badge waiting">Mobile friendly</span>
+          <span className="badge complete">Quick play</span>
+        </div>
+
         <div className="field">
           <label htmlFor="authEmail">Email address</label>
           <input
@@ -84,7 +88,7 @@ export function AuthPanel() {
           />
         </div>
 
-        <div className="button-row">
+        <div className="button-row auth-actions">
           <button
             className="button primary"
             disabled={!email.trim() || !password.trim() || activeAction !== null}
@@ -93,7 +97,7 @@ export function AuthPanel() {
             }}
             type="button"
           >
-            {activeAction === 'login' ? 'Logging in...' : 'Log in'}
+            {activeAction === 'login' ? 'Logging in...' : 'Play now'}
           </button>
           <button
             className="button secondary"
@@ -108,8 +112,8 @@ export function AuthPanel() {
         </div>
 
         <div className="helper-text">
-          Supabase can also handle OAuth providers like Google or GitHub, but this app is wired
-          for email/password accounts so friend requests can target exact email addresses.
+          Email/password keeps the friend flow simple. Once you are in, your rounds stay private to
+          you and your friends.
         </div>
 
         {error ? <div className="error-banner">{error}</div> : null}

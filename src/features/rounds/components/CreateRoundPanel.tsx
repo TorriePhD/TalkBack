@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
-import type { Friend } from '../../social/types';
+import { HoldToRecordButton } from '../../../components/HoldToRecordButton';
 import { createRoundRecord } from '../../../lib/rounds';
+import type { Friend } from '../../social/types';
+import { promptCatalog } from '../promptCatalog';
 import type { Round } from '../types';
 
 interface CreateRoundPanelProps {
@@ -11,6 +13,7 @@ interface CreateRoundPanelProps {
   currentUserId: string;
   friends: Friend[];
   onCreateRound: (round: Round) => void;
+  onOpenFriends: () => void;
 }
 
 export function CreateRoundPanel({
@@ -18,17 +21,20 @@ export function CreateRoundPanel({
   currentUserId,
   friends,
   onCreateRound,
+  onOpenFriends,
 }: CreateRoundPanelProps) {
-  const recorder = useAudioRecorder();
+  const recorder = useAudioRecorder({ prepareOnMount: true });
   const [recipientId, setRecipientId] = useState('');
-  const [correctPhrase, setCorrectPhrase] = useState('');
+  const [selectedPromptId, setSelectedPromptId] = useState(promptCatalog[0]?.id ?? '');
+  const [customPhrase, setCustomPhrase] = useState('');
+  const [isCustomPhrase, setIsCustomPhrase] = useState(false);
+  const [correctPhrase, setCorrectPhrase] = useState(promptCatalog[0]?.phrase ?? '');
   const [reversedAudioBlob, setReversedAudioBlob] = useState<Blob | null>(null);
   const [reverseError, setReverseError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isReversing, setIsReversing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const lastAutoReversedBlobRef = useRef<Blob | null>(null);
-  const lastPreviewedBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     if (!friends.length) {
@@ -37,7 +43,9 @@ export function CreateRoundPanel({
     }
 
     setRecipientId((currentRecipientId) =>
-      friends.some((friend) => friend.id === currentRecipientId) ? currentRecipientId : friends[0].id,
+      friends.some((friend) => friend.id === currentRecipientId)
+        ? currentRecipientId
+        : friends[0].id,
     );
   }, [friends]);
 
@@ -46,30 +54,6 @@ export function CreateRoundPanel({
     setReverseError(null);
     setSaveError(null);
     lastAutoReversedBlobRef.current = null;
-  }, [recorder.audioBlob, recorder.isRecording]);
-
-  useEffect(() => {
-    if (!recorder.audioBlob || recorder.isRecording) {
-      return;
-    }
-
-    if (lastPreviewedBlobRef.current === recorder.audioBlob) {
-      return;
-    }
-
-    const previewUrl = URL.createObjectURL(recorder.audioBlob);
-    const previewAudio = new Audio(previewUrl);
-    const timeoutId = window.setTimeout(() => {
-      void previewAudio.play().catch(() => undefined);
-    }, 1000);
-
-    lastPreviewedBlobRef.current = recorder.audioBlob;
-
-    return () => {
-      window.clearTimeout(timeoutId);
-      previewAudio.pause();
-      URL.revokeObjectURL(previewUrl);
-    };
   }, [recorder.audioBlob, recorder.isRecording]);
 
   useEffect(() => {
@@ -121,6 +105,16 @@ export function CreateRoundPanel({
     () => friends.find((friend) => friend.id === recipientId) ?? null,
     [friends, recipientId],
   );
+  const selectedPrompt = useMemo(
+    () => promptCatalog.find((prompt) => prompt.id === selectedPromptId) ?? null,
+    [selectedPromptId],
+  );
+  const phraseLabel = isCustomPhrase ? 'Custom phrase' : selectedPrompt?.label ?? 'Preset';
+  const recordingStateLabel = recorder.isRecording
+    ? 'Recording now'
+    : recorder.audioBlob
+      ? 'Take captured'
+      : 'Waiting on your take';
 
   const canCreateRound = useMemo(
     () =>
@@ -141,13 +135,34 @@ export function CreateRoundPanel({
     ],
   );
 
+  const selectPrompt = (promptId: string) => {
+    const nextPrompt = promptCatalog.find((prompt) => prompt.id === promptId);
+    if (!nextPrompt) {
+      return;
+    }
+
+    setSelectedPromptId(promptId);
+    setIsCustomPhrase(false);
+    setCorrectPhrase(nextPrompt.phrase);
+  };
+
+  const enableCustomPhrase = () => {
+    const seedPhrase = customPhrase.trim() || correctPhrase || selectedPrompt?.phrase || '';
+    setCustomPhrase(seedPhrase);
+    setIsCustomPhrase(true);
+    setCorrectPhrase(seedPhrase);
+  };
+
   const resetForm = () => {
-    setCorrectPhrase('');
+    const firstPrompt = promptCatalog[0];
+    setSelectedPromptId(firstPrompt?.id ?? '');
+    setCustomPhrase('');
+    setIsCustomPhrase(false);
+    setCorrectPhrase(firstPrompt?.phrase ?? '');
     setReversedAudioBlob(null);
     setReverseError(null);
     setSaveError(null);
     lastAutoReversedBlobRef.current = null;
-    lastPreviewedBlobRef.current = null;
     recorder.clearRecording();
   };
 
@@ -182,14 +197,22 @@ export function CreateRoundPanel({
       <section className="surface">
         <div className="section-header">
           <div>
+            <div className="eyebrow">New Round</div>
             <h2>Create Round</h2>
             <p>Rounds can only be sent to confirmed friends.</p>
           </div>
         </div>
 
-        <div className="empty-state">
-          Add a friend first. Once someone accepts your request, they will appear here as a round
-          recipient.
+        <div className="empty-state home-empty">
+          <h3>Need someone to send chaos to?</h3>
+          <p>
+            Add a friend first. Once someone accepts your request, they will show up here as a round recipient.
+          </p>
+          <div className="button-row">
+            <button className="button primary" onClick={onOpenFriends} type="button">
+              Add friends
+            </button>
+          </div>
         </div>
       </section>
     );
@@ -199,80 +222,148 @@ export function CreateRoundPanel({
     <section className="surface">
       <div className="section-header">
         <div>
+          <div className="eyebrow">New Round</div>
           <h2>Create Round</h2>
-          <p>Record the phrase, reverse it, and send the round to one of your confirmed friends.</p>
+          <p>Pick a friend, choose a phrase, then record a quick clip and send it.</p>
         </div>
       </div>
 
-      <div className="panel-grid">
-        <div className="stack">
-          <div className="field-grid two-up">
-            <div className="field">
-              <label htmlFor="senderEmail">From</label>
-              <input id="senderEmail" readOnly value={currentUserEmail} />
-            </div>
-            <div className="field">
-              <label htmlFor="recipientId">Send to friend</label>
-              <select
-                id="recipientId"
-                onChange={(event) => setRecipientId(event.target.value)}
-                value={recipientId}
-              >
-                {friends.map((friend) => (
-                  <option key={friend.id} value={friend.id}>
-                    {friend.email}
-                  </option>
-                ))}
-              </select>
+      <div className="badge-row">
+        <span className="badge primary">{selectedFriend?.email ?? 'Pick a friend'}</span>
+        <span className="badge created">{phraseLabel}</span>
+        <span className={`badge ${recorder.audioBlob ? 'complete' : 'waiting_for_attempt'}`}>
+          {recordingStateLabel}
+        </span>
+      </div>
+
+      <div className="stack">
+        <div className="surface nested-surface">
+          <div className="section-header compact-header">
+            <div>
+              <h3>1. Choose friend</h3>
+              <p>Only confirmed friends can receive a round.</p>
             </div>
           </div>
 
           <div className="field">
-            <label htmlFor="correctPhrase">Correct phrase</label>
-            <textarea
-              id="correctPhrase"
-              onChange={(event) => setCorrectPhrase(event.target.value)}
-              placeholder="Type the phrase your friend will try to decode."
-              value={correctPhrase}
-            />
+            <label htmlFor="recipientId">Send to friend</label>
+            <select
+              id="recipientId"
+              onChange={(event) => setRecipientId(event.target.value)}
+              value={recipientId}
+            >
+              {friends.map((friend) => (
+                <option key={friend.id} value={friend.id}>
+                  {friend.email}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="surface nested-surface">
+          <div className="section-header compact-header">
+            <div>
+              <h3>2. Choose phrase</h3>
+              <p>Use a preset or write your own phrase.</p>
+            </div>
           </div>
 
-          <div className="surface nested-surface">
-            <div className="section-header">
-              <div>
-                <h3>Original Recording</h3>
-                <p>Capture the phrase that {selectedFriend?.email ?? 'your friend'} will decode.</p>
-              </div>
-            </div>
-
-            <div className="button-row">
+          <div className="phrase-chip-row">
+            {promptCatalog.map((prompt) => (
               <button
-                className="button primary"
-                disabled={recorder.isRecording || recorder.isPreparing}
-                onPointerDown={() => {
-                  void recorder.startRecording();
+                className={`phrase-chip ${
+                  selectedPromptId === prompt.id && !isCustomPhrase ? 'selected' : ''
+                }`}
+                key={prompt.id}
+                onClick={() => selectPrompt(prompt.id)}
+                type="button"
+              >
+                {prompt.label}
+              </button>
+            ))}
+            <button
+              className={`phrase-chip ${isCustomPhrase ? 'selected' : ''}`}
+              onClick={enableCustomPhrase}
+              type="button"
+            >
+              Write my own
+            </button>
+          </div>
+
+          {isCustomPhrase ? (
+            <div className="field">
+              <label htmlFor="correctPhrase">Custom phrase</label>
+              <textarea
+                id="correctPhrase"
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setCustomPhrase(nextValue);
+                  setCorrectPhrase(nextValue);
                 }}
-                onPointerLeave={recorder.stopRecording}
-                onPointerUp={recorder.stopRecording}
-                type="button"
-              >
-                {recorder.isPreparing
-                  ? 'Requesting mic...'
-                  : recorder.isRecording
-                    ? 'Recording... release to stop'
-                    : 'Hold to record'}
-              </button>
-              <button
-                className="button ghost"
-                disabled={!recorder.audioBlob && !reversedAudioBlob}
-                onClick={resetForm}
-                type="button"
-              >
-                Clear round draft
-              </button>
+                placeholder="Type your secret phrase."
+                value={customPhrase}
+              />
             </div>
+          ) : (
+            <div className="result-box">
+              <p className="fine-print">Current phrase</p>
+              <p>
+                <strong>{selectedPrompt?.phrase}</strong>
+              </p>
+              <p className="helper-text">Switch to Write my own if you want something custom.</p>
+            </div>
+          )}
+        </div>
 
-            <div className="helper-text">{recorder.mimeType ? `Format: ${recorder.mimeType}` : ''}</div>
+        <div className="surface nested-surface">
+          <div className="section-header">
+            <div>
+              <h3>3. Record and send</h3>
+              <p>Hold to record, then release to save the take.</p>
+            </div>
+          </div>
+
+          <div className="result-box create-summary-card">
+            <p>
+              <strong>From:</strong> {currentUserEmail}
+            </p>
+            <p>
+              <strong>To:</strong> {selectedFriend?.email ?? 'Pick a friend'}
+            </p>
+            <p>
+              <strong>Phrase:</strong> {correctPhrase.trim() || 'Choose a phrase'}
+            </p>
+            <p>
+              <strong>Status:</strong> {recordingStateLabel}
+            </p>
+          </div>
+
+          <div className="button-row">
+            <HoldToRecordButton
+              disabled={isSaving}
+              isPrepared={recorder.isPrepared}
+              isPreparing={recorder.isPreparing}
+              isRecording={recorder.isRecording}
+              onStart={recorder.startRecording}
+              onStop={recorder.stopRecording}
+            />
+            <button
+              className="button ghost"
+              disabled={!recorder.audioBlob && !reversedAudioBlob}
+              onClick={resetForm}
+              type="button"
+            >
+              Reset draft
+            </button>
+          </div>
+
+          <div className="helper-text">
+            {isReversing
+              ? 'Turning your take backward...'
+              : recorder.mimeType
+                ? `Release to save. Format: ${recorder.mimeType}`
+                : 'The microphone warms up on page load so recording can start as soon as you press.'}
           </div>
 
           {recorder.error ? <div className="error-banner">{recorder.error}</div> : null}
@@ -280,40 +371,38 @@ export function CreateRoundPanel({
           {saveError ? <div className="error-banner">{saveError}</div> : null}
         </div>
 
-        <div className="stack">
+        {recorder.audioBlob || reversedAudioBlob ? (
           <div className="audio-grid">
             <AudioPlayerCard
-              title="Original Phrase"
-              description="Your clean recording before any processing."
+              title="Replay your take"
+              description="Use this only if you want a quick confidence check."
               blob={recorder.audioBlob}
             />
             <AudioPlayerCard
-              title="Reversed Phrase"
-              description="Locked for the sender until the round is complete."
-              blob={null}
+              title="Replay the flipped take"
+              description="This backward clip is exactly what your friend will hear."
+              blob={reversedAudioBlob}
             />
           </div>
-
-          <div className="button-row">
-            <button
-              className="button primary"
-              disabled={!canCreateRound}
-              onClick={() => {
-                void handleCreateRound();
-              }}
-              type="button"
-            >
-              {isSaving ? 'Sending round...' : 'Send round'}
-            </button>
+        ) : (
+          <div className="empty-state compact-empty">
+            Record a take and the preview clips will appear here.
           </div>
+        )}
+      </div>
 
-          <div className="helper-text">
-            {isReversing
-              ? 'Auto-reversing the latest recording...'
-              : reversedAudioBlob
-                ? `Ready to send to ${selectedFriend?.email ?? 'your friend'}.`
-                : 'Record and release to generate the reversed clip.'}
-          </div>
+      <div className="mobile-cta-bar">
+        <div className="button-row">
+          <button
+            className="button primary"
+            disabled={!canCreateRound}
+            onClick={() => {
+              void handleCreateRound();
+            }}
+            type="button"
+          >
+            {isSaving ? 'Sending...' : `Send round to ${selectedFriend?.email ?? 'friend'}`}
+          </button>
         </div>
       </div>
     </section>

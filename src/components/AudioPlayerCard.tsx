@@ -19,6 +19,23 @@ export function AudioPlayerCard({
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
+    const audioElement = audioRef.current;
+    if (!audioElement) {
+      return;
+    }
+
+    audioElement.pause();
+
+    if (src) {
+      audioElement.src = src;
+    } else {
+      audioElement.removeAttribute('src');
+    }
+
+    audioElement.load();
+  }, [src]);
+
+  useEffect(() => {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -30,16 +47,21 @@ export function AudioPlayerCard({
 
   return (
     <article className="audio-card">
-      <h4>{title}</h4>
+      <div className="audio-card-head">
+        <div>
+          <div className="card-kicker">Audio clip</div>
+          <h4>{title}</h4>
+        </div>
+        <span className={`badge ${src ? 'complete' : 'waiting_for_attempt'}`}>
+          {src ? 'Ready' : 'Locked'}
+        </span>
+      </div>
       <p>{description}</p>
       {src ? (
-        <audio ref={audioRef} controls preload="metadata" src={src} />
+        <audio key={src} ref={audioRef} controls preload="metadata" />
       ) : (
-        <div className="helper-text">No audio available yet.</div>
+        <div className="empty-state compact-empty">No audio available yet.</div>
       )}
-      {remoteUrl ? (
-        <div className="fine-print">Uploaded copy available from Supabase Storage.</div>
-      ) : null}
     </article>
   );
 }

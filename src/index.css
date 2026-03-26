@@ -315,6 +315,7 @@ p {
 
 .flex-field {
   flex: 1 1 280px;
+  min-width: 0;
 }
 
 .helper-text {
@@ -1284,6 +1285,11 @@ p {
 
   .app-topbar .hero-actions > * {
     flex: 0 0 auto;
+  }
+
+  /* Keep stacked form fields compact when rows collapse to a column on mobile. */
+  .flex-field {
+    flex: 1 1 auto;
   }
 
   .progress-rail {

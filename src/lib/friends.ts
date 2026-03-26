@@ -6,8 +6,10 @@ interface FriendshipRow {
   id: string;
   user_one_id: string;
   user_one_email: string;
+  user_one_username: string;
   user_two_id: string;
   user_two_email: string;
+  user_two_username: string;
   created_at: string;
   completed_round_count: number;
   total_star_score: number;
@@ -19,8 +21,10 @@ interface FriendRequestRow {
   id: string;
   requester_id: string;
   requester_email: string;
+  requester_username: string;
   recipient_id: string;
   recipient_email: string;
+  recipient_username: string;
   status: FriendRequest['status'];
   created_at: string;
   responded_at: string | null;
@@ -39,7 +43,7 @@ export async function listFriends(currentUserId: string): Promise<Friend[]> {
   const { data, error } = await client
     .from('friendships')
     .select(
-      'id, user_one_id, user_one_email, user_two_id, user_two_email, created_at, completed_round_count, total_star_score, next_sender_id, last_completed_at',
+      'id, user_one_id, user_one_email, user_one_username, user_two_id, user_two_email, user_two_username, created_at, completed_round_count, total_star_score, next_sender_id, last_completed_at',
     )
     .or(`user_one_id.eq.${currentUserId},user_two_id.eq.${currentUserId}`)
     .order('last_completed_at', { ascending: false, nullsFirst: false })
@@ -53,6 +57,7 @@ export async function listFriends(currentUserId: string): Promise<Friend[]> {
     row.user_one_id === currentUserId
       ? {
           id: row.user_two_id,
+          username: row.user_two_username,
           email: row.user_two_email,
           createdAt: row.created_at,
           completedRoundCount: row.completed_round_count,
@@ -65,6 +70,7 @@ export async function listFriends(currentUserId: string): Promise<Friend[]> {
         }
       : {
           id: row.user_one_id,
+          username: row.user_one_username,
           email: row.user_one_email,
           createdAt: row.created_at,
           completedRoundCount: row.completed_round_count,
@@ -85,7 +91,7 @@ export async function listFriendRequests(
   const { data, error } = await client
     .from('friend_requests')
     .select(
-      'id, requester_id, requester_email, recipient_id, recipient_email, status, created_at, responded_at',
+      'id, requester_id, requester_email, requester_username, recipient_id, recipient_email, recipient_username, status, created_at, responded_at',
     )
     .eq('status', 'pending')
     .or(`requester_id.eq.${currentUserId},recipient_id.eq.${currentUserId}`)
@@ -102,22 +108,25 @@ export async function listFriendRequests(
       id: row.id,
       requesterId: row.requester_id,
       requesterEmail: row.requester_email,
+      requesterUsername: row.requester_username,
       recipientId: row.recipient_id,
       recipientEmail: row.recipient_email,
+      recipientUsername: row.recipient_username,
       status: row.status,
       createdAt: row.created_at,
       respondedAt: row.responded_at,
       direction: isIncoming ? 'incoming' : 'outgoing',
       otherUserId: isIncoming ? row.requester_id : row.recipient_id,
+      otherUserUsername: isIncoming ? row.requester_username : row.recipient_username,
       otherUserEmail: isIncoming ? row.requester_email : row.recipient_email,
     };
   });
 }
 
-export async function sendFriendRequestByEmail(recipientEmail: string) {
+export async function sendFriendRequestByUsername(recipientIdentifier: string) {
   const client = requireSupabase();
   const { error } = await client.rpc('request_friendship', {
-    recipient_email_input: recipientEmail.trim().toLowerCase(),
+    recipient_identifier_input: recipientIdentifier.trim().toLowerCase(),
   });
 
   if (error) {

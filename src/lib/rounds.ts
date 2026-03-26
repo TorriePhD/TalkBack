@@ -10,8 +10,10 @@ const ROUND_COLUMNS = [
   'created_at',
   'sender_id',
   'sender_email',
+  'sender_username',
   'recipient_id',
   'recipient_email',
+  'recipient_username',
   'correct_phrase',
   'original_audio_path',
   'reversed_audio_path',
@@ -27,8 +29,10 @@ interface RoundRow {
   created_at: string;
   sender_id: string;
   sender_email: string;
+  sender_username: string;
   recipient_id: string;
   recipient_email: string;
+  recipient_username: string;
   correct_phrase: string;
   original_audio_path: string;
   reversed_audio_path: string;
@@ -130,8 +134,10 @@ async function mapRoundRow(row: RoundRow): Promise<Round> {
     createdAt: row.created_at,
     senderId: row.sender_id,
     senderEmail: row.sender_email,
+    senderUsername: row.sender_username,
     recipientId: row.recipient_id,
     recipientEmail: row.recipient_email,
+    recipientUsername: row.recipient_username,
     correctPhrase: row.correct_phrase,
     originalAudioBlob: null,
     reversedAudioBlob: null,

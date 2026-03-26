@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { FriendRequest } from '../types';
 import type { Friend } from '../types';
-import { respondToFriendRequest, sendFriendRequestByEmail } from '../../../lib/friends';
+import { respondToFriendRequest, sendFriendRequestByUsername } from '../../../lib/friends';
 
 interface FriendsPanelProps {
   friends: Friend[];
@@ -10,7 +10,7 @@ interface FriendsPanelProps {
 }
 
 export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps) {
-  const [friendEmail, setFriendEmail] = useState('');
+  const [friendUsername, setFriendUsername] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -31,8 +31,8 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
     setIsSending(true);
 
     try {
-      await sendFriendRequestByEmail(friendEmail);
-      setFriendEmail('');
+      await sendFriendRequestByUsername(friendUsername);
+      setFriendUsername('');
       setInfo('Friend request sent.');
       await onRefresh();
     } catch (caughtError) {
@@ -72,7 +72,7 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
       <div className="section-header">
         <div>
           <h2>Invite your people</h2>
-          <p>Add a friend by email. Once they accept, they appear in the home list and can start a thread.</p>
+          <p>Add a friend by username. Once they accept, they appear in the home list and can start a thread.</p>
         </div>
       </div>
 
@@ -87,18 +87,17 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
 
           <div className="field-row">
             <div className="field flex-field">
-              <label htmlFor="friendEmail">Friend email</label>
+              <label htmlFor="friendUsername">Friend username</label>
               <input
-                id="friendEmail"
-                onChange={(event) => setFriendEmail(event.target.value)}
-                placeholder="friend@example.com"
-                type="email"
-                value={friendEmail}
+                id="friendUsername"
+                onChange={(event) => setFriendUsername(event.target.value)}
+                placeholder="friendname"
+                value={friendUsername}
               />
             </div>
             <button
               className="button primary"
-              disabled={!friendEmail.trim() || isSending}
+              disabled={!friendUsername.trim() || isSending}
               onClick={() => {
                 void handleSendRequest();
               }}
@@ -125,7 +124,7 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
                 {incomingRequests.map((request) => (
                   <div className="list-card" key={request.id}>
                     <div>
-                      <strong>{request.otherUserEmail}</strong>
+                      <strong>{request.otherUserUsername}</strong>
                       <p className="helper-text">
                         Sent {new Date(request.createdAt).toLocaleString()}
                       </p>
@@ -173,7 +172,7 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
                 {outgoingRequests.map((request) => (
                   <div className="list-card" key={request.id}>
                     <div>
-                      <strong>{request.otherUserEmail}</strong>
+                      <strong>{request.otherUserUsername}</strong>
                       <p className="helper-text">
                         Sent {new Date(request.createdAt).toLocaleString()}
                       </p>
@@ -203,7 +202,7 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
               {friends.map((friend) => (
                 <div className="list-card friend-card" key={friend.id}>
                   <div className="friend-copy">
-                    <strong>{friend.email}</strong>
+                    <strong>{friend.username}</strong>
                     <p className="helper-text">
                       Friends since {new Date(friend.createdAt).toLocaleDateString()}
                     </p>

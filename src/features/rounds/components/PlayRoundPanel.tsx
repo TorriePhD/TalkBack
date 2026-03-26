@@ -276,6 +276,35 @@ export function PlayRoundPanel({
     setIsArchiving(false);
   };
 
+  const reviewAudioGrid = (
+    <div className="audio-grid">
+      <AudioPlayerCard
+        title="Your original prompt"
+        description="The forward recording that started this round."
+        blob={round.originalAudioBlob}
+        remoteUrl={round.originalAudioUrl}
+      />
+      <AudioPlayerCard
+        title="Your reversed prompt"
+        description="The backward clip your friend heard before imitating it."
+        blob={round.reversedAudioBlob}
+        remoteUrl={round.reversedAudioUrl}
+      />
+      <AudioPlayerCard
+        title="Their imitation"
+        description="Your friend's attempt at copying the reversed prompt."
+        blob={round.attemptAudioBlob}
+        remoteUrl={round.attemptAudioUrl}
+      />
+      <AudioPlayerCard
+        title="Their imitation reversed"
+        description="The flipped version they used when making their guess."
+        blob={round.attemptReversedBlob}
+        remoteUrl={round.attemptReversedUrl}
+      />
+    </div>
+  );
+
   return (
     <section className="surface round-screen">
       <div className="round-screen-header">
@@ -291,7 +320,7 @@ export function PlayRoundPanel({
 
         <div className="pill-row round-screen-meta">
           <span className="badge primary">
-            {isRecipient ? `From ${round.senderEmail}` : `To ${round.recipientEmail}`}
+            {isRecipient ? `From ${round.senderUsername}` : `To ${round.recipientUsername}`}
           </span>
           <StatusBadge status={round.status} />
         </div>
@@ -434,12 +463,7 @@ export function PlayRoundPanel({
                 <p>{roundSummary?.callToAction}</p>
               </div>
 
-              <AudioPlayerCard
-                title="Their imitation"
-                description="You can listen now. The score locks in after they submit the guess."
-                blob={round.attemptAudioBlob}
-                remoteUrl={round.attemptAudioUrl}
-              />
+              {reviewAudioGrid}
             </div>
           ) : null}
 
@@ -459,12 +483,7 @@ export function PlayRoundPanel({
                 </p>
               </div>
 
-              <AudioPlayerCard
-                title="Their imitation"
-                description="Review the attempt, then continue so the next turn can start."
-                blob={round.attemptAudioBlob}
-                remoteUrl={round.attemptAudioUrl}
-              />
+              {reviewAudioGrid}
             </div>
           ) : null}
         </div>

@@ -128,7 +128,7 @@ export function getRoundSummary(round: Round, isRecipient: boolean): RoundSummar
     }
 
     return {
-      headline: `Your turn against ${round.senderEmail}.`,
+      headline: `Your turn against ${round.senderUsername}.`,
       description: 'Listen to the reversed prompt, record your imitation, then make your guess.',
       callToAction: 'Start with the reversed prompt.',
     };
@@ -136,7 +136,7 @@ export function getRoundSummary(round: Round, isRecipient: boolean): RoundSummar
 
   if (round.status === 'complete') {
     return {
-      headline: `${round.recipientEmail} finished the round.`,
+      headline: `${round.recipientUsername} finished the round.`,
       description: 'Review their attempt, see the score, then continue the thread.',
       callToAction: 'Open the review and move to the next turn.',
     };
@@ -144,14 +144,14 @@ export function getRoundSummary(round: Round, isRecipient: boolean): RoundSummar
 
   if (round.status === 'attempted') {
     return {
-      headline: `${round.recipientEmail} finished the imitation.`,
+      headline: `${round.recipientUsername} finished the imitation.`,
       description: 'Their take is saved. They still need to submit the guess to lock the score.',
       callToAction: 'You can already preview the imitation below.',
     };
   }
 
   return {
-    headline: `Waiting on ${round.recipientEmail}.`,
+    headline: `Waiting on ${round.recipientUsername}.`,
     description: 'They need to record an imitation before the round can finish.',
     callToAction: 'They will play the reversed prompt next.',
   };

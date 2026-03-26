@@ -4,11 +4,18 @@ import { supabase, supabaseConfigError } from './supabase';
 export interface AppProfile {
   id: string;
   email: string;
+  username: string;
   createdAt: string;
 }
 
-interface AuthCredentials {
+interface SignInCredentials {
+  identifier: string;
+  password: string;
+}
+
+interface SignUpCredentials {
   email: string;
+  username: string;
   password: string;
 }
 
@@ -27,6 +34,14 @@ function requireSupabase() {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function normalizeUsername(username: string) {
+  return username
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 function buildEmailRedirectUrl() {
@@ -60,7 +75,7 @@ export function subscribeToAuthChanges(
 }
 
 export async function signUpWithEmail(
-  credentials: AuthCredentials,
+  credentials: SignUpCredentials,
 ): Promise<SignUpResult> {
   const client = requireSupabase();
   const { data, error } = await client.auth.signUp({
@@ -68,6 +83,9 @@ export async function signUpWithEmail(
     password: credentials.password,
     options: {
       emailRedirectTo: buildEmailRedirectUrl(),
+      data: {
+        username: normalizeUsername(credentials.username),
+      },
     },
   });
 
@@ -81,10 +99,39 @@ export async function signUpWithEmail(
   };
 }
 
-export async function signInWithEmail(credentials: AuthCredentials) {
+async function resolveSignInEmail(identifier: string) {
+  const normalizedIdentifier = identifier.trim().toLowerCase();
+
+  if (!normalizedIdentifier) {
+    return null;
+  }
+
+  if (normalizedIdentifier.includes('@')) {
+    return normalizeEmail(normalizedIdentifier);
+  }
+
   const client = requireSupabase();
+  const { data, error } = await client.rpc('resolve_login_email', {
+    login_input: normalizedIdentifier,
+  });
+
+  if (error) {
+    throw new Error(`Unable to look up that username: ${error.message}`);
+  }
+
+  return typeof data === 'string' && data ? data : null;
+}
+
+export async function signInWithIdentifier(credentials: SignInCredentials) {
+  const client = requireSupabase();
+  const resolvedEmail = await resolveSignInEmail(credentials.identifier);
+
+  if (!resolvedEmail) {
+    throw new Error('Unable to log in with that username or email.');
+  }
+
   const { error } = await client.auth.signInWithPassword({
-    email: normalizeEmail(credentials.email),
+    email: resolvedEmail,
     password: credentials.password,
   });
 
@@ -106,7 +153,7 @@ export async function getMyProfile(): Promise<AppProfile> {
   const client = requireSupabase();
   const { data, error } = await client
     .from('profiles')
-    .select('id, email, created_at')
+    .select('id, email, username, created_at')
     .single();
 
   if (error || !data) {
@@ -116,6 +163,7 @@ export async function getMyProfile(): Promise<AppProfile> {
   return {
     id: data.id,
     email: data.email,
+    username: data.username,
     createdAt: data.created_at,
   };
 }

@@ -5,12 +5,11 @@ import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import { HoldToRecordButton } from '../../../components/HoldToRecordButton';
 import { createRoundRecord } from '../../../lib/rounds';
 import type { Friend } from '../../social/types';
-import { promptCatalog } from '../promptCatalog';
 import type { Round } from '../types';
 
 interface CreateRoundPanelProps {
-  currentUserEmail: string;
   currentUserId: string;
+  currentUserUsername: string;
   friend: Friend;
   onBack: () => void;
   onCreateRound: (round: Round) => void;
@@ -19,18 +18,15 @@ interface CreateRoundPanelProps {
 type CreateStage = 'phrase' | 'record';
 
 export function CreateRoundPanel({
-  currentUserEmail,
   currentUserId,
+  currentUserUsername,
   friend,
   onBack,
   onCreateRound,
 }: CreateRoundPanelProps) {
   const recorder = useAudioRecorder({ prepareOnMount: true });
   const [stage, setStage] = useState<CreateStage>('phrase');
-  const [selectedPromptId, setSelectedPromptId] = useState(promptCatalog[0]?.id ?? '');
-  const [customPhrase, setCustomPhrase] = useState('');
-  const [isCustomPhrase, setIsCustomPhrase] = useState(false);
-  const [correctPhrase, setCorrectPhrase] = useState(promptCatalog[0]?.phrase ?? '');
+  const [correctPhrase, setCorrectPhrase] = useState('');
   const [reversedAudioBlob, setReversedAudioBlob] = useState<Blob | null>(null);
   const [reverseError, setReverseError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -90,15 +86,6 @@ export function CreateRoundPanel({
     };
   }, [recorder.audioBlob, recorder.isRecording]);
 
-  const selectedPrompt = useMemo(
-    () => promptCatalog.find((prompt) => prompt.id === selectedPromptId) ?? null,
-    [selectedPromptId],
-  );
-  const recordingStateLabel = recorder.isRecording
-    ? 'Recording now'
-    : recorder.audioBlob
-      ? 'Take captured'
-      : 'Waiting on your take';
   const canContinueToRecord = Boolean(correctPhrase.trim());
   const canCreateRound = useMemo(
     () =>
@@ -117,24 +104,6 @@ export function CreateRoundPanel({
       reversedAudioBlob,
     ],
   );
-
-  const enableCustomPhrase = () => {
-    const seedPhrase = customPhrase.trim() || correctPhrase || selectedPrompt?.phrase || '';
-    setCustomPhrase(seedPhrase);
-    setIsCustomPhrase(true);
-    setCorrectPhrase(seedPhrase);
-  };
-
-  const selectPrompt = (promptId: string) => {
-    const nextPrompt = promptCatalog.find((prompt) => prompt.id === promptId);
-    if (!nextPrompt) {
-      return;
-    }
-
-    setSelectedPromptId(promptId);
-    setIsCustomPhrase(false);
-    setCorrectPhrase(nextPrompt.phrase);
-  };
 
   const resetRecording = () => {
     setReversedAudioBlob(null);
@@ -178,19 +147,16 @@ export function CreateRoundPanel({
 
         <div className="round-screen-copy">
           <div className="eyebrow">Your Send Turn</div>
-          <h2>{stage === 'phrase' ? 'Pick the phrase' : 'Record the prompt'}</h2>
+          <h2>{stage === 'phrase' ? 'Write the phrase' : 'Record the prompt'}</h2>
           <p>
             {stage === 'phrase'
-              ? `This round goes to ${friend.email}. Once they finish, the next turn flips back.`
+              ? `This round goes to ${friend.username}. Once they finish, the next turn flips back.`
               : 'Hold to record, release to save, and send the reversed clip.'}
           </p>
         </div>
 
         <div className="pill-row round-screen-meta">
-          <span className="badge primary">{friend.email}</span>
-          <span className={`badge ${recorder.audioBlob ? 'complete' : 'waiting_for_attempt'}`}>
-            {recordingStateLabel}
-          </span>
+          <span className="badge primary">{friend.username}</span>
         </div>
       </div>
 
@@ -199,55 +165,22 @@ export function CreateRoundPanel({
           <div className="round-screen-step">
             <div className="section-header compact-header">
               <div>
-                <h3>Choose what they will imitate</h3>
+                <h3>Write what they will imitate</h3>
                 <p>Keep it short so the whole screen stays simple on mobile.</p>
               </div>
             </div>
 
-            <div className="phrase-chip-row">
-              {promptCatalog.map((prompt) => (
-                <button
-                  className={`phrase-chip ${
-                    selectedPromptId === prompt.id && !isCustomPhrase ? 'selected' : ''
-                  }`}
-                  key={prompt.id}
-                  onClick={() => selectPrompt(prompt.id)}
-                  type="button"
-                >
-                  {prompt.label}
-                </button>
-              ))}
-              <button
-                className={`phrase-chip ${isCustomPhrase ? 'selected' : ''}`}
-                onClick={enableCustomPhrase}
-                type="button"
-              >
-                Write my own
-              </button>
+            <div className="field">
+              <label htmlFor="correctPhrase">Phrase</label>
+              <textarea
+                id="correctPhrase"
+                onChange={(event) => {
+                  setCorrectPhrase(event.target.value);
+                }}
+                placeholder="Type the phrase you want them to imitate."
+                value={correctPhrase}
+              />
             </div>
-
-            {isCustomPhrase ? (
-              <div className="field">
-                <label htmlFor="correctPhrase">Custom phrase</label>
-                <textarea
-                  id="correctPhrase"
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    setCustomPhrase(nextValue);
-                    setCorrectPhrase(nextValue);
-                  }}
-                  placeholder="Type your phrase."
-                  value={customPhrase}
-                />
-              </div>
-            ) : (
-              <div className="result-box">
-                <p className="fine-print">Selected phrase</p>
-                <p>
-                  <strong>{selectedPrompt?.phrase}</strong>
-                </p>
-              </div>
-            )}
           </div>
         ) : null}
 
@@ -255,10 +188,10 @@ export function CreateRoundPanel({
           <div className="round-screen-step">
             <div className="result-box round-screen-summary">
               <p>
-                <strong>From:</strong> {currentUserEmail}
+                <strong>From:</strong> {currentUserUsername}
               </p>
               <p>
-                <strong>To:</strong> {friend.email}
+                <strong>To:</strong> {friend.username}
               </p>
               <p>
                 <strong>Phrase:</strong> {correctPhrase.trim() || 'Choose a phrase first'}
@@ -320,7 +253,7 @@ export function CreateRoundPanel({
         ) : (
           <div className="button-row">
             <button className="button ghost" onClick={() => setStage('phrase')} type="button">
-              Change phrase
+              Edit phrase
             </button>
             <button
               className="button primary"
@@ -330,7 +263,7 @@ export function CreateRoundPanel({
               }}
               type="button"
             >
-              {isSaving ? 'Sending...' : `Send to ${friend.email}`}
+              {isSaving ? 'Sending...' : `Send to ${friend.username}`}
             </button>
           </div>
         )}

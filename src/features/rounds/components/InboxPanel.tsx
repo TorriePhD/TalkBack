@@ -24,8 +24,8 @@ function describeRound(round: Round, currentUserId: string) {
   }
 
   return round.status === 'attempted'
-    ? `${round.recipientEmail} recorded an attempt and still needs to submit a guess.`
-    : `Waiting for ${round.recipientEmail} to play the round.`;
+    ? `${round.recipientUsername} recorded an attempt and still needs to submit a guess.`
+    : `Waiting for ${round.recipientUsername} to play the round.`;
 }
 
 export function InboxPanel({
@@ -64,7 +64,7 @@ export function InboxPanel({
               >
                 <div className="round-row">
                   <div>
-                    <h4>{isRecipient ? `From ${round.senderEmail}` : `To ${round.recipientEmail}`}</h4>
+                    <h4>{isRecipient ? `From ${round.senderUsername}` : `To ${round.recipientUsername}`}</h4>
                     <p>{new Date(round.createdAt).toLocaleString()}</p>
                   </div>
                   <StatusBadge status={round.status} />

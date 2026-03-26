@@ -5,7 +5,7 @@ type FriendStatusTone = 'primary' | 'waiting' | 'active' | 'complete';
 
 interface HomeFriendSummary {
   id: string;
-  email: string;
+  username: string;
   createdAt: string;
   averageStars?: number | null;
   statusLabel?: string;
@@ -29,7 +29,7 @@ interface HomePanelProps {
 
 interface FriendRow {
   id: string;
-  email: string;
+  username: string;
   createdAt: string | null;
   averageStars: number | null;
   statusLabel: string;
@@ -127,7 +127,7 @@ function buildDerivedFriendRows(
   if (friends?.length) {
     return friends.map<FriendRow>((friend) => ({
       id: friend.id,
-      email: friend.email,
+      username: friend.username,
       createdAt: friend.createdAt ?? null,
       averageStars: friend.averageStars ?? null,
       statusLabel: friend.statusLabel ?? 'Ready to start',
@@ -146,7 +146,7 @@ function buildDerivedFriendRows(
     string,
     {
       id: string;
-      email: string;
+      username: string;
       createdAt: string | null;
       rounds: Round[];
     }
@@ -155,14 +155,13 @@ function buildDerivedFriendRows(
   for (const round of rounds) {
     const isSender: boolean = round.senderId === currentUserId;
     const peerId: string = isSender ? round.recipientId : round.senderId;
-    const peerEmail: string = isSender ? round.recipientEmail : round.senderEmail;
+    const peerUsername: string = isSender ? round.recipientUsername : round.senderUsername;
 
     if (!peerId || peerId === currentUserId) {
       continue;
     }
 
     const existing = peers.get(peerId);
-
     if (existing) {
       existing.rounds.push(round);
       continue;
@@ -170,7 +169,7 @@ function buildDerivedFriendRows(
 
     peers.set(peerId, {
       id: peerId,
-      email: peerEmail,
+      username: peerUsername,
       createdAt: round.createdAt,
       rounds: [round],
     });
@@ -191,7 +190,7 @@ function buildDerivedFriendRows(
 
       return {
         id: peer.id,
-        email: peer.email,
+        username: peer.username,
         createdAt: peer.createdAt,
         averageStars,
         statusLabel: getStatusLabel(latestRound, isCurrentUserTurn),
@@ -204,7 +203,7 @@ function buildDerivedFriendRows(
     .sort((left, right) => {
       const leftDate = new Date(left.lastActiveAt ?? left.createdAt ?? 0).getTime();
       const rightDate = new Date(right.lastActiveAt ?? right.createdAt ?? 0).getTime();
-      return rightDate - leftDate || left.email.localeCompare(right.email);
+      return rightDate - leftDate || left.username.localeCompare(right.username);
     });
 }
 
@@ -218,7 +217,7 @@ function formatAverageStars(averageStars: number | null) {
 
 function renderStars(averageStars: number | null) {
   const filledStars = averageStars === null ? 0 : Math.round(averageStars);
-  return '★'.repeat(filledStars) + '☆'.repeat(Math.max(0, 3 - filledStars));
+  return '***'.slice(0, filledStars).padEnd(3, '-');
 }
 
 export function HomePanel({
@@ -332,12 +331,12 @@ export function HomePanel({
                 type="button"
               >
                 <div className="friend-avatar" aria-hidden="true">
-                  {friend.email.slice(0, 1).toUpperCase()}
+                  {friend.username.slice(0, 1).toUpperCase()}
                 </div>
 
                 <div className="friend-copy">
                   <div className="friend-headline">
-                    <strong>{friend.email}</strong>
+                    <strong>{friend.username}</strong>
                     <span className={`friend-status friend-status-${friend.statusTone}`}>
                       {friend.statusLabel}
                     </span>

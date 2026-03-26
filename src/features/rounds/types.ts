@@ -21,8 +21,10 @@ export interface Round {
   createdAt: string;
   senderId: string;
   senderEmail: string;
+  senderUsername: string;
   recipientId: string;
   recipientEmail: string;
+  recipientUsername: string;
   correctPhrase: string;
   originalAudioBlob: Blob | null;
   reversedAudioBlob: Blob | null;

@@ -127,17 +127,17 @@ function getThreadDescription(
   const { canCurrentUserStart, canRecipientComposeNext, reviewRound } = options;
 
   if (reviewRound) {
-    return `Review ${friend.email}'s imitation of your previous prompt, then continue into the next round.`;
+    return `Review ${friend.username}'s imitation of your previous prompt, then continue into the next round.`;
   }
 
   if (!round) {
     if (canRecipientComposeNext) {
-      return `Your last guess is locked in. Record the next prompt for ${friend.email}.`;
+      return `Your last guess is locked in. Record the next prompt for ${friend.username}.`;
     }
 
     return canCurrentUserStart
-      ? `There is no live round right now. Start the next prompt for ${friend.email}.`
-      : `${friend.email} is up to record the next prompt.`;
+      ? `There is no live round right now. Start the next prompt for ${friend.username}.`
+      : `${friend.username} is up to record the next prompt.`;
   }
 
   if (round.status === 'complete') {
@@ -209,16 +209,20 @@ function WaitingThreadPanel({
 
         <div className="round-screen-copy">
           <div className="eyebrow">{canCurrentUserStart ? 'Your Send Turn' : 'Waiting'}</div>
-          <h2>{canCurrentUserStart ? `Start the next round for ${friend.email}` : `Waiting on ${friend.email}`}</h2>
+          <h2>
+            {canCurrentUserStart
+              ? `Start the next round for ${friend.username}`
+              : `Waiting on ${friend.username}`}
+          </h2>
           <p>
             {canCurrentUserStart
               ? 'There is no live round in this thread. Record the next prompt to keep the session moving.'
-              : `${friend.email} is up to send the next prompt. Once they record it, your turn will open here.`}
+              : `${friend.username} is up to send the next prompt. Once they record it, your turn will open here.`}
           </p>
         </div>
 
         <div className="pill-row round-screen-meta">
-          <span className="badge primary">{friend.email}</span>
+          <span className="badge primary">{friend.username}</span>
           <span className={`badge ${canCurrentUserStart ? 'complete' : 'waiting_for_attempt'}`}>
             {canCurrentUserStart ? 'Ready' : 'Waiting'}
           </span>
@@ -437,7 +441,7 @@ function App() {
       .sort((left, right) => {
         const leftDate = new Date(left.lastActiveAt ?? left.friend.createdAt).getTime();
         const rightDate = new Date(right.lastActiveAt ?? right.friend.createdAt).getTime();
-        return rightDate - leftDate || left.friend.email.localeCompare(right.friend.email);
+        return rightDate - leftDate || left.friend.username.localeCompare(right.friend.username);
       });
   }, [currentUserId, friends, rounds]);
 
@@ -451,12 +455,12 @@ function App() {
       case 'friends':
         return 'Friends';
       case 'thread':
-        return selectedThread?.friend.email ?? 'Thread';
+        return selectedThread?.friend.username ?? 'Thread';
       case 'home':
       default:
         return 'Home';
     }
-  }, [selectedThread?.friend.email, view]);
+  }, [selectedThread?.friend.username, view]);
 
   const currentPageDescription = useMemo(() => {
     if (view === 'home') {
@@ -550,7 +554,7 @@ function App() {
     () =>
       threadSummaries.map((thread) => ({
         id: thread.friend.id,
-        email: thread.friend.email,
+        username: thread.friend.username,
         createdAt: thread.friend.createdAt,
         averageStars: thread.averageStars,
         statusLabel: thread.statusLabel,
@@ -643,7 +647,7 @@ function App() {
 
             <div className="app-topbar-side">
               <div className="meta-chip topbar-meta">
-                <strong>{profile?.email ?? 'Loading profile...'}</strong>
+                <strong>{profile?.username ? `@${profile.username}` : 'Loading profile...'}</strong>
                 <span>
                   {friends.length} friend{friends.length === 1 ? '' : 's'} connected
                 </span>
@@ -664,7 +668,7 @@ function App() {
                   <div>
                     <div className="eyebrow">Menu</div>
                     <h3>Navigate</h3>
-                    <p>{profile?.email ?? 'Signed in'}</p>
+                    <p>{profile?.username ? `@${profile.username}` : 'Signed in'}</p>
                   </div>
                 </div>
 
@@ -675,17 +679,6 @@ function App() {
                   <DrawerButton active={view === 'friends'} onClick={handleOpenFriends}>
                     Friends
                   </DrawerButton>
-                  {selectedThread ? (
-                    <DrawerButton
-                      active={view === 'thread'}
-                      onClick={() => {
-                        setView('thread');
-                        setIsMenuOpen(false);
-                      }}
-                    >
-                      Current Thread
-                    </DrawerButton>
-                  ) : null}
                   <DrawerButton
                     onClick={() => {
                       void handleSignOut();
@@ -728,8 +721,8 @@ function App() {
             selectedThread &&
             (isComposingNextRound || (!selectedThread.displayRound && selectedThread.canCurrentUserStart)) ? (
               <CreateRoundPanel
-                currentUserEmail={profile.email}
                 currentUserId={profile.id}
+                currentUserUsername={profile.username}
                 friend={selectedThread.friend}
                 onBack={() => setIsComposingNextRound(false)}
                 onCreateRound={handleCreateRound}

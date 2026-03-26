@@ -1,4 +1,6 @@
-export interface Friend {
+import type { FriendThreadStats } from '../rounds/types';
+
+export interface Friend extends FriendThreadStats {
   id: string;
   email: string;
   createdAt: string;

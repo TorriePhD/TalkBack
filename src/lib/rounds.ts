@@ -1,4 +1,6 @@
 import type { Round } from '../features/rounds/types';
+import type { ArchiveCompletedRoundSummary } from '../features/rounds/types';
+import type { RoundStarCount } from '../features/rounds/types';
 import { scoreGuess } from '../features/rounds/utils';
 import { supabase, supabaseConfigError } from './supabase';
 import { createSignedAudioUrl, uploadAudio } from './storage/uploadAudio';
@@ -58,6 +60,24 @@ interface SubmitRoundGuessInput {
   correctPhrase: string;
 }
 
+interface ArchiveCompletedRoundInput {
+  currentUserId: string;
+  roundId: string;
+}
+
+interface ArchiveCompletedRoundRow {
+  friendship_id: string;
+  user_one_id: string;
+  user_one_email: string;
+  user_two_id: string;
+  user_two_email: string;
+  completed_round_count: number;
+  total_star_score: number;
+  average_star_score: number | null;
+  next_sender_id: string | null;
+  last_completed_at: string | null;
+}
+
 function requireSupabase() {
   if (!supabase) {
     throw new Error(supabaseConfigError || 'Supabase is not configured.');
@@ -70,6 +90,30 @@ function makeRoundId() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `round-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function isMissingStorageObjectError(message: string) {
+  return /not found|does not exist|no such key|not exist/i.test(message);
+}
+
+export function scoreToStars(score: number | null): RoundStarCount {
+  if (score === null) {
+    return 0;
+  }
+
+  if (score >= 10) {
+    return 3;
+  }
+
+  if (score >= 8) {
+    return 2;
+  }
+
+  if (score >= 5) {
+    return 1;
+  }
+
+  return 0;
 }
 
 async function mapRoundRow(row: RoundRow): Promise<Round> {
@@ -220,4 +264,72 @@ export async function submitRoundGuess(
   }
 
   return mapRoundRow(data as unknown as RoundRow);
+}
+
+export async function archiveCompletedRound(
+  input: ArchiveCompletedRoundInput,
+): Promise<ArchiveCompletedRoundSummary> {
+  const client = requireSupabase();
+  const { data: roundData, error: roundError } = await client
+    .from('rounds')
+    .select(ROUND_COLUMNS)
+    .eq('id', input.roundId)
+    .single();
+
+  if (roundError || !roundData) {
+    throw new Error(`Unable to load the round to archive: ${roundError?.message || 'Unknown error.'}`);
+  }
+
+  const round = roundData as unknown as RoundRow;
+  if (round.sender_id !== input.currentUserId) {
+    throw new Error('Only the original sender can archive this round.');
+  }
+
+  if (round.status !== 'complete') {
+    throw new Error('Only completed rounds can be archived.');
+  }
+
+  const storagePaths = Array.from(
+    new Set(
+      [
+        round.original_audio_path,
+        round.reversed_audio_path,
+        round.attempt_audio_path,
+        round.attempt_reversed_path,
+      ].filter((path): path is string => Boolean(path)),
+    ),
+  );
+
+  if (storagePaths.length > 0) {
+    const { error: deleteError } = await client.storage.from('audio').remove(storagePaths);
+
+    if (deleteError && !isMissingStorageObjectError(deleteError.message)) {
+      throw new Error(`Unable to remove the archived audio: ${deleteError.message}`);
+    }
+  }
+
+  const { data, error } = await client.rpc('archive_completed_round', {
+    round_id: input.roundId,
+  });
+
+  if (error) {
+    throw new Error(`Unable to archive the completed round: ${error.message}`);
+  }
+
+  const archivedRow = ((data as ArchiveCompletedRoundRow[] | null) ?? [])[0];
+  if (!archivedRow) {
+    throw new Error('The completed round could not be archived.');
+  }
+
+  return {
+    roundId: input.roundId,
+    friendshipId: archivedRow.friendship_id,
+    friendId: round.recipient_id,
+    senderId: round.sender_id,
+    recipientId: round.recipient_id,
+    completedRoundCount: archivedRow.completed_round_count,
+    averageStars: archivedRow.average_star_score,
+    nextSenderId: archivedRow.next_sender_id,
+    lastCompletedAt: archivedRow.last_completed_at,
+  };
 }

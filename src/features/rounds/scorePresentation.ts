@@ -1,12 +1,13 @@
 import type { Round } from './types';
 
-type MedalTone = 'bronze' | 'silver' | 'gold' | 'platinum' | 'pending';
+type StarTone = 'zero' | 'one' | 'two' | 'three' | 'pending';
 
 export interface ScorePresentation {
-  medalLabel: string;
+  starCount: number | null;
+  starLabel: string;
   description: string;
   celebration: string;
-  tone: MedalTone;
+  tone: StarTone;
 }
 
 export interface RoundSummary {
@@ -15,46 +16,90 @@ export interface RoundSummary {
   callToAction: string;
 }
 
-function buildScorePresentation(score: number): ScorePresentation {
+export function scoreToStars(score: number | null): number | null {
+  if (score === null) {
+    return null;
+  }
+
   if (score === 10) {
-    return {
-      medalLabel: 'Platinum',
-      description: 'Exact match. Nothing got lost in the noise.',
-      celebration: 'Perfect score. That was spotless.',
-      tone: 'platinum',
-    };
+    return 3;
   }
 
   if (score >= 8) {
-    return {
-      medalLabel: 'Gold',
-      description: 'Very close. Your imitation landed cleanly.',
-      celebration: 'Gold tier. Tiny details made the difference.',
-      tone: 'gold',
-    };
+    return 2;
   }
 
   if (score >= 5) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function buildScorePresentation(score: number): ScorePresentation {
+  const starCount = scoreToStars(score) ?? 0;
+
+  if (starCount === 3) {
     return {
-      medalLabel: 'Silver',
+      starCount,
+      starLabel: '3 stars',
+      description: 'Exact match. Nothing got lost in the noise.',
+      celebration: 'Perfect score. That landed clean.',
+      tone: 'three',
+    };
+  }
+
+  if (starCount === 2) {
+    return {
+      starCount,
+      starLabel: '2 stars',
+      description: 'Very close. Your imitation held together well.',
+      celebration: 'Strong round. Small details kept it from three.',
+      tone: 'two',
+    };
+  }
+
+  if (starCount === 1) {
+    return {
+      starCount,
+      starLabel: '1 star',
       description: 'A solid attempt with a few wobble points.',
-      celebration: 'Silver energy. You were in the pocket.',
-      tone: 'silver',
+      celebration: 'One star on the board. You were in range.',
+      tone: 'one',
     };
   }
 
   return {
-    medalLabel: 'Bronze',
-    description: 'A brave first pass. The shape is there.',
-    celebration: 'Bronze earned. The next round can only get sharper.',
-    tone: 'bronze',
+    starCount,
+    starLabel: '0 stars',
+    description: 'A brave first pass. The shape is there, but the phrase drifted.',
+    celebration: 'No stars this time. The next round resets fast.',
+    tone: 'zero',
   };
+}
+
+export function formatStars(value: number) {
+  return `${value} star${value === 1 ? '' : 's'}`;
+}
+
+export function formatAverageStars(value: number | null) {
+  if (value === null || Number.isNaN(value)) {
+    return 'No stars yet';
+  }
+
+  const roundedValue = Math.round(value * 10) / 10;
+  const label = Number.isInteger(roundedValue)
+    ? roundedValue.toFixed(0)
+    : roundedValue.toFixed(1);
+
+  return `${label} avg stars`;
 }
 
 export function getScorePresentation(score: number | null): ScorePresentation {
   if (score === null) {
     return {
-      medalLabel: 'Pending',
+      starCount: null,
+      starLabel: 'Pending',
       description: 'Submit the guess to reveal the score.',
       celebration: 'The reveal is waiting.',
       tone: 'pending',
@@ -68,9 +113,9 @@ export function getRoundSummary(round: Round, isRecipient: boolean): RoundSummar
   if (isRecipient) {
     if (round.status === 'complete') {
       return {
-        headline: 'Round complete. See how close you got.',
-        description: 'Your final score is ready and the original phrase is unlocked.',
-        callToAction: 'Replay the clips any time.',
+        headline: 'Round complete. Your stars are in.',
+        description: 'Your score is locked. Your friend still needs to review the attempt before the next round can move on.',
+        callToAction: 'Check the score, then head back to the thread.',
       };
     }
 
@@ -92,16 +137,16 @@ export function getRoundSummary(round: Round, isRecipient: boolean): RoundSummar
   if (round.status === 'complete') {
     return {
       headline: `${round.recipientEmail} finished the round.`,
-      description: 'The reveal is unlocked and the score is in.',
-      callToAction: 'Check the final result below.',
+      description: 'Review their attempt, see the score, then continue the thread.',
+      callToAction: 'Open the review and move to the next turn.',
     };
   }
 
   if (round.status === 'attempted') {
     return {
-      headline: `${round.recipientEmail} is on the last step.`,
-      description: 'Their take is saved and they still need to submit a guess.',
-      callToAction: 'The final reveal is close.',
+      headline: `${round.recipientEmail} finished the imitation.`,
+      description: 'Their take is saved. They still need to submit the guess to lock the score.',
+      callToAction: 'You can already preview the imitation below.',
     };
   }
 

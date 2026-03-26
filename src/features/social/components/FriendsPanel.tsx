@@ -67,21 +67,21 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
   };
 
   return (
-    <section className="surface">
+    <section className="surface panel-shell">
       <div className="eyebrow">Crew</div>
       <div className="section-header">
         <div>
           <h2>Invite your people</h2>
-          <p>Friends unlock round sending. Add someone by email, then wait for the link-up.</p>
+          <p>Add a friend by email. Once they accept, they appear in the home list and can start a thread.</p>
         </div>
       </div>
 
-      <div className="stack">
-        <div className="surface nested-surface">
+      <div className="stack panel-stack">
+        <div className="surface nested-surface panel-card">
           <div className="section-header">
             <div>
               <h3>Add a friend</h3>
-              <p>Both people need an account before a request can go out.</p>
+              <p>Both accounts need to exist before the invite can be sent.</p>
             </div>
           </div>
 
@@ -110,11 +110,11 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
         </div>
 
         <div className="split-panel">
-          <div className="surface nested-surface">
+          <div className="surface nested-surface panel-card">
             <div className="section-header compact-header">
               <div>
                 <h3>Incoming</h3>
-                <p>Tap accept to unlock round sending.</p>
+                <p>Accept to make the pair available for threads.</p>
               </div>
             </div>
 
@@ -158,11 +158,11 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
             )}
           </div>
 
-          <div className="surface nested-surface">
+          <div className="surface nested-surface panel-card">
             <div className="section-header compact-header">
               <div>
                 <h3>Outgoing</h3>
-                <p>These invites are still waiting on the other person.</p>
+                <p>Invites that are still waiting on the other side.</p>
               </div>
             </div>
 
@@ -186,11 +186,11 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
           </div>
         </div>
 
-        <div className="surface nested-surface">
+        <div className="surface nested-surface panel-card">
           <div className="section-header compact-header">
             <div>
               <h3>Friend List</h3>
-              <p>Only confirmed friends appear here and can receive rounds.</p>
+              <p>Confirmed friends are the only people who can receive rounds.</p>
             </div>
           </div>
 
@@ -201,14 +201,14 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
           ) : (
             <div className="stack mini-stack">
               {friends.map((friend) => (
-                <div className="list-card" key={friend.id}>
-                  <div>
+                <div className="list-card friend-card" key={friend.id}>
+                  <div className="friend-copy">
                     <strong>{friend.email}</strong>
                     <p className="helper-text">
                       Friends since {new Date(friend.createdAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <span className="badge complete">Locked in</span>
+                  <span className="badge complete">Ready</span>
                 </div>
               ))}
             </div>

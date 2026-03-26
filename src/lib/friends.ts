@@ -9,6 +9,10 @@ interface FriendshipRow {
   user_two_id: string;
   user_two_email: string;
   created_at: string;
+  completed_round_count: number;
+  total_star_score: number;
+  next_sender_id: string | null;
+  last_completed_at: string | null;
 }
 
 interface FriendRequestRow {
@@ -34,8 +38,11 @@ export async function listFriends(currentUserId: string): Promise<Friend[]> {
   const client = requireSupabase();
   const { data, error } = await client
     .from('friendships')
-    .select('id, user_one_id, user_one_email, user_two_id, user_two_email, created_at')
+    .select(
+      'id, user_one_id, user_one_email, user_two_id, user_two_email, created_at, completed_round_count, total_star_score, next_sender_id, last_completed_at',
+    )
     .or(`user_one_id.eq.${currentUserId},user_two_id.eq.${currentUserId}`)
+    .order('last_completed_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -48,11 +55,25 @@ export async function listFriends(currentUserId: string): Promise<Friend[]> {
           id: row.user_two_id,
           email: row.user_two_email,
           createdAt: row.created_at,
+          completedRoundCount: row.completed_round_count,
+          averageStars:
+            row.completed_round_count > 0
+              ? row.total_star_score / row.completed_round_count
+              : null,
+          nextSenderId: row.next_sender_id,
+          lastCompletedAt: row.last_completed_at,
         }
       : {
           id: row.user_one_id,
           email: row.user_one_email,
           createdAt: row.created_at,
+          completedRoundCount: row.completed_round_count,
+          averageStars:
+            row.completed_round_count > 0
+              ? row.total_star_score / row.completed_round_count
+              : null,
+          nextSenderId: row.next_sender_id,
+          lastCompletedAt: row.last_completed_at,
         },
   );
 }

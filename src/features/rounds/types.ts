@@ -1,4 +1,20 @@
 export type RoundStatus = 'waiting_for_attempt' | 'attempted' | 'complete';
+export type RoundStarCount = 0 | 1 | 2 | 3;
+
+export interface FriendThreadStats {
+  completedRoundCount: number;
+  averageStars?: number | null;
+  nextSenderId: string | null;
+  lastCompletedAt: string | null;
+}
+
+export interface ArchiveCompletedRoundSummary extends FriendThreadStats {
+  roundId: string;
+  friendshipId: string;
+  friendId: string;
+  senderId: string;
+  recipientId: string;
+}
 
 export interface Round {
   id: string;

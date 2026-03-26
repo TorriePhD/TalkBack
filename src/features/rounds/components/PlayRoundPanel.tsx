@@ -11,20 +11,13 @@ import type { Round } from '../types';
 interface PlayRoundPanelProps {
   currentUserId: string;
   round: Round | null;
+  onArchiveRound: (round: Round) => Promise<void>;
+  onBack: () => void;
+  onComposeNextRound: () => void;
   onUpdateRound: (roundId: string, updater: (round: Round) => Round) => void;
 }
 
-type GuidedStepState = 'pending' | 'active' | 'done';
 type RecipientStage = 'listen' | 'record' | 'guess' | 'reveal';
-
-interface GuidedStep {
-  id: string;
-  title: string;
-  description: string;
-  state: GuidedStepState;
-}
-
-const RECIPIENT_STAGE_ORDER: RecipientStage[] = ['listen', 'record', 'guess', 'reveal'];
 
 function getRecipientStage(options: {
   hasAttempt: boolean;
@@ -58,109 +51,25 @@ function getRecipientStage(options: {
   return 'listen';
 }
 
-function getRecipientSteps(activeStage: RecipientStage): GuidedStep[] {
-  const activeIndex = RECIPIENT_STAGE_ORDER.indexOf(activeStage);
-
-  return [
-    {
-      id: 'listen',
-      title: 'Listen',
-      description: 'Replay the backward prompt until you are ready.',
-      state: activeIndex > 0 ? 'done' : 'active',
-    },
-    {
-      id: 'record',
-      title: 'Record',
-      description: 'Hold to record your imitation.',
-      state: activeIndex > 1 ? 'done' : activeIndex === 1 ? 'active' : 'pending',
-    },
-    {
-      id: 'guess',
-      title: 'Guess',
-      description: 'Type the phrase you think you heard.',
-      state: activeIndex > 2 ? 'done' : activeIndex === 2 ? 'active' : 'pending',
-    },
-    {
-      id: 'reveal',
-      title: 'Reveal',
-      description: 'See the medal, score, and original phrase.',
-      state: activeIndex === 3 ? 'active' : 'pending',
-    },
-  ];
-}
-
-function getSenderSteps(round: Round): GuidedStep[] {
-  if (round.status === 'complete') {
-    return [
-      {
-        id: 'sent',
-        title: 'Sent',
-        description: 'The round went out successfully.',
-        state: 'done',
-      },
-      {
-        id: 'played',
-        title: 'Played',
-        description: `${round.recipientEmail} finished the challenge.`,
-        state: 'done',
-      },
-      {
-        id: 'reveal',
-        title: 'Reveal',
-        description: 'The final result is unlocked.',
-        state: 'active',
-      },
-    ];
+function getRecipientStepLabel(stage: RecipientStage) {
+  switch (stage) {
+    case 'listen':
+      return 'Step 1 of 4';
+    case 'record':
+      return 'Step 2 of 4';
+    case 'guess':
+      return 'Step 3 of 4';
+    case 'reveal':
+      return 'Step 4 of 4';
   }
-
-  if (round.status === 'attempted') {
-    return [
-      {
-        id: 'sent',
-        title: 'Sent',
-        description: 'Your round is already live.',
-        state: 'done',
-      },
-      {
-        id: 'played',
-        title: 'Played',
-        description: `${round.recipientEmail} recorded a take.`,
-        state: 'active',
-      },
-      {
-        id: 'reveal',
-        title: 'Reveal',
-        description: 'They still need to submit a guess.',
-        state: 'pending',
-      },
-    ];
-  }
-
-  return [
-    {
-      id: 'sent',
-      title: 'Sent',
-      description: 'The round is live.',
-      state: 'done',
-    },
-    {
-      id: 'waiting',
-      title: 'Waiting',
-      description: `${round.recipientEmail} has not recorded yet.`,
-      state: 'active',
-    },
-    {
-      id: 'reveal',
-      title: 'Reveal',
-      description: 'The score appears after their guess.',
-      state: 'pending',
-    },
-  ];
 }
 
 export function PlayRoundPanel({
   currentUserId,
   round,
+  onArchiveRound,
+  onBack,
+  onComposeNextRound,
   onUpdateRound,
 }: PlayRoundPanelProps) {
   const recorder = useAudioRecorder({ prepareOnMount: true });
@@ -169,6 +78,7 @@ export function PlayRoundPanel({
   const [info, setInfo] = useState<string | null>(null);
   const [isSavingAttempt, setIsSavingAttempt] = useState(false);
   const [isSubmittingGuess, setIsSubmittingGuess] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [hasConfirmedListen, setHasConfirmedListen] = useState(false);
   const lastSavedAttemptBlobRef = useRef<Blob | null>(null);
 
@@ -202,10 +112,6 @@ export function PlayRoundPanel({
         isComplete: round.status === 'complete',
       })
     : 'listen';
-  const recipientSteps = round ? getRecipientSteps(recipientStage) : [];
-  const senderSteps = round ? getSenderSteps(round) : [];
-  const activeRecipientStepIndex = recipientSteps.findIndex((step) => step.state === 'active');
-  const activeRecipientStep = recipientSteps[activeRecipientStepIndex] ?? null;
 
   const canSubmitGuess = useMemo(
     () =>
@@ -257,7 +163,7 @@ export function PlayRoundPanel({
       }));
       lastSavedAttemptBlobRef.current = attemptBlob;
       recorder.clearRecording();
-      setInfo('Take saved. Move on to your guess.');
+      setInfo('Take saved. Your guess step is open now.');
     } catch (caughtError) {
       if (!cancelled?.()) {
         setError(
@@ -301,9 +207,16 @@ export function PlayRoundPanel({
 
   if (!round) {
     return (
-      <section className="surface">
-        <div className="empty-state">
-          Select a round from home to start the listen, record, guess, and reveal flow.
+      <section className="surface round-screen">
+        <div className="round-screen-header">
+          <button className="button ghost round-screen-back" onClick={onBack} type="button">
+            Back
+          </button>
+          <div className="round-screen-copy">
+            <div className="eyebrow">Round</div>
+            <h2>No active round</h2>
+            <p>Pick a friend from home to open the current thread.</p>
+          </div>
         </div>
       </section>
     );
@@ -343,280 +256,278 @@ export function PlayRoundPanel({
     }
   };
 
+  const handleArchiveRound = async () => {
+    setError(null);
+    setInfo(null);
+    setIsArchiving(true);
+
+    try {
+      await onArchiveRound(round);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : 'Unable to continue the thread right now.',
+      );
+      setIsArchiving(false);
+      return;
+    }
+
+    setIsArchiving(false);
+  };
+
   return (
-    <section className="surface">
-      <div className="section-header">
-        <div>
-          <div className="eyebrow">{isRecipient ? 'Your Turn' : 'Sent Round'}</div>
-          <h2>{isRecipient ? 'Play Round' : 'Round Progress'}</h2>
-          <p>{roundSummary?.headline ?? 'Tap a round to begin.'}</p>
+    <section className="surface round-screen">
+      <div className="round-screen-header">
+        <button className="button ghost round-screen-back" onClick={onBack} type="button">
+          Back
+        </button>
+
+        <div className="round-screen-copy">
+          <div className="eyebrow">{isRecipient ? getRecipientStepLabel(recipientStage) : 'Round Review'}</div>
+          <h2>{roundSummary?.headline ?? 'Round'}</h2>
+          <p>{roundSummary?.description}</p>
         </div>
-        <StatusBadge status={round.status} />
+
+        <div className="pill-row round-screen-meta">
+          <span className="badge primary">
+            {isRecipient ? `From ${round.senderEmail}` : `To ${round.recipientEmail}`}
+          </span>
+          <StatusBadge status={round.status} />
+        </div>
       </div>
 
       {isRecipient ? (
-        <div className="stack round-stage-shell">
-          <div className="progress-rail" aria-label="Round steps">
-            {recipientSteps.map((step, index) => (
-              <div
-                className={`progress-pill progress-pill-${step.state}`}
-                key={step.id}
-              >
-                <span className="progress-pill-number">{index + 1}</span>
-                <div>
-                  <strong>{step.title}</strong>
-                  <span>{step.description}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="round-screen-body">
+          {recipientStage === 'listen' ? (
+            <div className="round-screen-step">
+              <AudioPlayerCard
+                title="Reversed prompt"
+                description="Replay this clip until you are ready to imitate it."
+                blob={round.reversedAudioBlob}
+                remoteUrl={round.reversedAudioUrl}
+              />
 
-          <div className="surface nested-surface round-focus-panel">
-            <div className="section-header">
-              <div>
-                <div className="eyebrow">
-                  Step {Math.max(activeRecipientStepIndex + 1, 1)} of {recipientSteps.length}
-                </div>
-                <h3>{activeRecipientStep?.title ?? 'Round step'}</h3>
-                <p>{activeRecipientStep?.description ?? roundSummary?.description}</p>
+              <div className="helper-text round-screen-helper">
+                Nothing else opens until you confirm you are ready to record.
               </div>
             </div>
+          ) : null}
 
-            {recipientStage === 'listen' ? (
-              <div className="stack" key="recipient-stage-listen">
-                <AudioPlayerCard
-                  title="Reversed prompt"
-                  description="Replay this clip until you are ready to imitate it."
-                  blob={round.reversedAudioBlob}
-                  remoteUrl={round.reversedAudioUrl}
+          {recipientStage === 'record' ? (
+            <div className="round-screen-step">
+              <div className="button-row round-record-actions">
+                <HoldToRecordButton
+                  disabled={round.status === 'complete' || isSavingAttempt}
+                  isPrepared={recorder.isPrepared}
+                  isPreparing={recorder.isPreparing}
+                  isRecording={recorder.isRecording}
+                  onStart={recorder.startRecording}
+                  onStop={recorder.stopRecording}
                 />
-
-                <div className="button-row">
+                {recorder.audioBlob ? (
                   <button
-                    className="button primary"
-                    onClick={() => {
-                      void recorder.prepareRecording();
-                      setHasConfirmedListen(true);
-                    }}
+                    className="button ghost"
+                    disabled={recorder.isRecording || isSavingAttempt}
+                    onClick={recorder.clearRecording}
                     type="button"
                   >
-                    Ready to imitate
+                    Clear take
                   </button>
-                </div>
-
-                <div className="helper-text">
-                  Nothing else is on screen until you move to the recording step.
-                </div>
+                ) : null}
               </div>
-            ) : null}
 
-            {recipientStage === 'record' ? (
-              <div className="stack" key="recipient-stage-record">
-                <AudioPlayerCard
-                  title="Replay the prompt"
-                  description="Use this if you need another listen before recording."
-                  blob={round.reversedAudioBlob}
-                  remoteUrl={round.reversedAudioUrl}
+              <AudioPlayerCard
+                title="Latest take"
+                description={
+                  recorder.audioBlob
+                    ? 'Replay the take you just made.'
+                    : 'Your saved imitation appears here after recording.'
+                }
+                blob={recorder.audioBlob ?? round.attemptAudioBlob}
+                remoteUrl={round.attemptAudioUrl}
+              />
+
+              <div className="helper-text round-screen-helper">
+                {recorder.isRecording
+                  ? 'Recording now. Release to save the attempt.'
+                  : isSavingAttempt
+                    ? 'Saving and reversing your take now...'
+                    : 'The mic is already prepared so you can start immediately.'}
+              </div>
+            </div>
+          ) : null}
+
+          {recipientStage === 'guess' ? (
+            <div className="round-screen-step">
+              <AudioPlayerCard
+                title="Reversed take"
+                description="Your imitation is locked in. Type the original phrase."
+                blob={round.attemptReversedBlob}
+                remoteUrl={round.attemptReversedUrl}
+              />
+
+              <div className="field">
+                <label htmlFor="guess">Your guess</label>
+                <input
+                  id="guess"
+                  disabled={round.status === 'complete' || isSubmittingGuess}
+                  onChange={(event) => setGuess(event.target.value)}
+                  placeholder="What was the original phrase?"
+                  value={guess}
                 />
-
-                <div className="button-row">
-                  <HoldToRecordButton
-                    disabled={round.status === 'complete' || isSavingAttempt}
-                    isPrepared={recorder.isPrepared}
-                    isPreparing={recorder.isPreparing}
-                    isRecording={recorder.isRecording}
-                    onStart={recorder.startRecording}
-                    onStop={recorder.stopRecording}
-                  />
-                  {recorder.audioBlob ? (
-                    <button
-                      className="button ghost"
-                      disabled={recorder.isRecording || isSavingAttempt}
-                      onClick={recorder.clearRecording}
-                      type="button"
-                    >
-                      Clear take
-                    </button>
-                  ) : null}
-                </div>
-
-                <AudioPlayerCard
-                  title="Latest take"
-                  description={
-                    recorder.audioBlob
-                      ? 'Replay the take you just made.'
-                      : 'Your most recent take will show up here after recording.'
-                  }
-                  blob={recorder.audioBlob ?? round.attemptAudioBlob}
-                  remoteUrl={round.attemptAudioUrl}
-                />
-
-                <div className="helper-text">
-                  {recorder.isRecording
-                    ? 'Recording now. Release when you want to save the take.'
-                    : isSavingAttempt
-                      ? 'Saving and reversing your take now...'
-                      : 'The mic is warmed up on open so recording can start as soon as you press.'}
-                </div>
-              </div>
-            ) : null}
-
-            {recipientStage === 'guess' ? (
-              <div className="stack" key="recipient-stage-guess">
-                <AudioPlayerCard
-                  title="Reversed take"
-                  description="Your imitation is locked in and flipped back. Type the original phrase."
-                  blob={round.attemptReversedBlob}
-                  remoteUrl={round.attemptReversedUrl}
-                />
-
-                <div className="field">
-                  <label htmlFor="guess">Your guess</label>
-                  <input
-                    id="guess"
-                    disabled={round.status === 'complete' || isSubmittingGuess}
-                    onChange={(event) => setGuess(event.target.value)}
-                    placeholder="What was the original phrase?"
-                    value={guess}
-                  />
-                </div>
-
-                <div className="button-row">
-                  <button
-                    className="button primary"
-                    disabled={!canSubmitGuess}
-                    onClick={() => {
-                      void handleSubmitGuess();
-                    }}
-                    type="button"
-                  >
-                    {isSubmittingGuess ? 'Revealing...' : 'Reveal score'}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {recipientStage === 'reveal' && scorePresentation ? (
-              <div className="stack" key="recipient-stage-reveal">
-                <div className="result-box">
-                  <p className={`score-mark tone-${scorePresentation.tone}`}>
-                    {scorePresentation.medalLabel}
-                  </p>
-                  <p>{scorePresentation.celebration}</p>
-                  <p>{scorePresentation.description}</p>
-                  <p>
-                    <strong>Guess:</strong> {round.guess || 'No guess submitted'}
-                  </p>
-                  <p>
-                    <strong>Original phrase:</strong> {round.correctPhrase}
-                  </p>
-                </div>
-
-                <div className="audio-grid">
-                  <AudioPlayerCard
-                    title="Original prompt"
-                    description="This is the forward version that started the round."
-                    blob={round.originalAudioBlob}
-                    remoteUrl={round.originalAudioUrl}
-                  />
-                  <AudioPlayerCard
-                    title="Your imitation"
-                    description="Replay the take that was scored."
-                    blob={round.attemptAudioBlob}
-                    remoteUrl={round.attemptAudioUrl}
-                  />
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="surface nested-surface round-side-card">
-            <div className="section-header compact-header">
-              <div>
-                <h3>Round summary</h3>
-                <p>{roundSummary?.description}</p>
               </div>
             </div>
+          ) : null}
 
-            <div className="result-box">
-              <p>
-                <strong>From:</strong> {round.senderEmail}
-              </p>
-              <p>{roundSummary?.callToAction}</p>
-              <p>
-                {round.status === 'complete'
-                  ? 'The reveal is unlocked, so you can replay the clips or go start another round.'
-                  : 'Complete the current step and the next one opens automatically.'}
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="stack round-stage-shell">
-          <div className="progress-rail" aria-label="Round status">
-            {senderSteps.map((step, index) => (
-              <div
-                className={`progress-pill progress-pill-${step.state}`}
-                key={step.id}
-              >
-                <span className="progress-pill-number">{index + 1}</span>
-                <div>
-                  <strong>{step.title}</strong>
-                  <span>{step.description}</span>
-                </div>
+          {recipientStage === 'reveal' && scorePresentation ? (
+            <div className="round-screen-step">
+              <div className="result-box">
+                <p className={`score-mark tone-${scorePresentation.tone}`}>
+                  {scorePresentation.starLabel}
+                </p>
+                <p>{scorePresentation.celebration}</p>
+                <p>{scorePresentation.description}</p>
+                <p>
+                  <strong>Guess:</strong> {round.guess || 'No guess submitted'}
+                </p>
+                <p>
+                  <strong>Original phrase:</strong> {round.correctPhrase}
+                </p>
               </div>
-            ))}
-          </div>
 
-          <div className="surface nested-surface round-focus-panel">
-            <div className="section-header">
-              <div>
-                <h3>Round progress</h3>
-                <p>{roundSummary?.description}</p>
-              </div>
-              <StatusBadge status={round.status} />
-            </div>
-
-            <div className="result-box">
-              <p>
-                <strong>Recipient:</strong> {round.recipientEmail}
-              </p>
-              <p>
-                <strong>Phrase:</strong> {round.correctPhrase}
-              </p>
-              {round.status === 'complete' && scorePresentation ? (
-                <>
-                  <p className={`score-mark tone-${scorePresentation.tone}`}>
-                    {scorePresentation.medalLabel}
-                  </p>
-                  <p>{scorePresentation.celebration}</p>
-                  <p>{scorePresentation.description}</p>
-                  <p>
-                    <strong>Guess:</strong> {round.guess || 'No guess submitted'}
-                  </p>
-                </>
-              ) : (
-                <p>{roundSummary?.callToAction}</p>
-              )}
-            </div>
-
-            <div className="audio-grid">
               <AudioPlayerCard
                 title="Original prompt"
-                description="Your forward recording for this round."
+                description="This is the forward clip that started the round you just finished."
                 blob={round.originalAudioBlob}
                 remoteUrl={round.originalAudioUrl}
               />
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="round-screen-body">
+          {round.status === 'waiting_for_attempt' ? (
+            <div className="round-screen-step">
+              <div className="result-box">
+                <p>
+                  <strong>Phrase:</strong> {round.correctPhrase}
+                </p>
+                <p>{roundSummary?.callToAction}</p>
+              </div>
+
               <AudioPlayerCard
-                title="Saved imitation"
-                description="This unlocks once the recipient records a take."
+                title="Your prompt"
+                description="This is the forward clip your friend is about to imitate."
+                blob={round.originalAudioBlob}
+                remoteUrl={round.originalAudioUrl}
+              />
+            </div>
+          ) : null}
+
+          {round.status === 'attempted' ? (
+            <div className="round-screen-step">
+              <div className="result-box">
+                <p>
+                  <strong>Phrase:</strong> {round.correctPhrase}
+                </p>
+                <p>{roundSummary?.callToAction}</p>
+              </div>
+
+              <AudioPlayerCard
+                title="Their imitation"
+                description="You can listen now. The score locks in after they submit the guess."
                 blob={round.attemptAudioBlob}
                 remoteUrl={round.attemptAudioUrl}
               />
             </div>
-          </div>
+          ) : null}
+
+          {round.status === 'complete' && scorePresentation ? (
+            <div className="round-screen-step">
+              <div className="result-box">
+                <p className={`score-mark tone-${scorePresentation.tone}`}>
+                  {scorePresentation.starLabel}
+                </p>
+                <p>{scorePresentation.celebration}</p>
+                <p>{scorePresentation.description}</p>
+                <p>
+                  <strong>Guess:</strong> {round.guess || 'No guess submitted'}
+                </p>
+                <p>
+                  <strong>Original phrase:</strong> {round.correctPhrase}
+                </p>
+              </div>
+
+              <AudioPlayerCard
+                title="Their imitation"
+                description="Review the attempt, then continue so the next turn can start."
+                blob={round.attemptAudioBlob}
+                remoteUrl={round.attemptAudioUrl}
+              />
+            </div>
+          ) : null}
         </div>
       )}
+
+      <div className="round-screen-footer">
+        {isRecipient && recipientStage === 'listen' ? (
+          <div className="button-row">
+            <button
+              className="button primary"
+              onClick={() => {
+                void recorder.prepareRecording();
+                setHasConfirmedListen(true);
+              }}
+              type="button"
+            >
+              Ready to imitate
+            </button>
+          </div>
+        ) : null}
+
+        {isRecipient && recipientStage === 'guess' ? (
+          <div className="button-row">
+            <button
+              className="button primary"
+              disabled={!canSubmitGuess}
+              onClick={() => {
+                void handleSubmitGuess();
+              }}
+              type="button"
+            >
+              {isSubmittingGuess ? 'Revealing...' : 'Reveal stars'}
+            </button>
+          </div>
+        ) : null}
+
+        {isRecipient && recipientStage === 'reveal' ? (
+          <div className="button-row">
+            <button
+              className="button primary"
+              onClick={onComposeNextRound}
+              type="button"
+            >
+              Record next prompt
+            </button>
+          </div>
+        ) : null}
+
+        {!isRecipient && round.status === 'complete' ? (
+          <div className="button-row">
+            <button
+              className="button primary"
+              disabled={isArchiving}
+              onClick={() => {
+                void handleArchiveRound();
+              }}
+              type="button"
+            >
+              {isArchiving ? 'Continuing...' : 'Continue thread'}
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       <div className="stack">
         {recorder.error ? <div className="error-banner">{recorder.error}</div> : null}

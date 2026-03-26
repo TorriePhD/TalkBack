@@ -641,7 +641,7 @@ function App() {
 
             <div className="badge-row">
               <span className="badge created">One chain per friend</span>
-              <span className="badge waiting">Hold to record</span>
+              <span className="badge waiting">Tap to record</span>
               <span className="badge complete">0 to 3 stars</span>
             </div>
           </div>

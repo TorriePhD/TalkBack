@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
-import { HoldToRecordButton } from '../../../components/HoldToRecordButton';
+import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { StatusBadge } from '../../../components/StatusBadge';
 import { saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
 import { getRoundSummary, getScorePresentation } from '../scorePresentation';
@@ -72,7 +72,7 @@ export function PlayRoundPanel({
   onComposeNextRound,
   onUpdateRound,
 }: PlayRoundPanelProps) {
-  const recorder = useAudioRecorder({ prepareOnMount: true });
+  const recorder = useAudioRecorder({ preparedStreamIdleMs: 0 });
   const [guess, setGuess] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -346,9 +346,8 @@ export function PlayRoundPanel({
           {recipientStage === 'record' ? (
             <div className="round-screen-step">
               <div className="button-row round-record-actions">
-                <HoldToRecordButton
+                <ToggleRecordButton
                   disabled={round.status === 'complete' || isSavingAttempt}
-                  isPrepared={recorder.isPrepared}
                   isPreparing={recorder.isPreparing}
                   isRecording={recorder.isRecording}
                   onStart={recorder.startRecording}
@@ -376,14 +375,6 @@ export function PlayRoundPanel({
                 blob={recorder.audioBlob ?? round.attemptAudioBlob}
                 remoteUrl={round.attemptAudioUrl}
               />
-
-              <div className="helper-text round-screen-helper">
-                {recorder.isRecording
-                  ? 'Recording now. Release to save the attempt.'
-                  : isSavingAttempt
-                    ? 'Saving and reversing your take now...'
-                    : 'The mic is already prepared so you can start immediately.'}
-              </div>
             </div>
           ) : null}
 
@@ -495,7 +486,6 @@ export function PlayRoundPanel({
             <button
               className="button primary"
               onClick={() => {
-                void recorder.prepareRecording();
                 setHasConfirmedListen(true);
               }}
               type="button"

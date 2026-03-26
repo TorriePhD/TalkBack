@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
-import { HoldToRecordButton } from '../../../components/HoldToRecordButton';
+import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { WaveformLoader } from '../../../components/WaveformLoader';
 import { createRoundRecord } from '../../../lib/rounds';
 import type { Friend } from '../../social/types';
@@ -25,7 +25,7 @@ export function CreateRoundPanel({
   onBack,
   onCreateRound,
 }: CreateRoundPanelProps) {
-  const recorder = useAudioRecorder({ prepareOnMount: true });
+  const recorder = useAudioRecorder({ preparedStreamIdleMs: 0 });
   const [stage, setStage] = useState<CreateStage>('phrase');
   const [correctPhrase, setCorrectPhrase] = useState('');
   const [reversedAudioBlob, setReversedAudioBlob] = useState<Blob | null>(null);
@@ -152,7 +152,7 @@ export function CreateRoundPanel({
           <p>
             {stage === 'phrase'
               ? `This round goes to ${friend.username}. Once they finish, the next turn flips back.`
-              : 'Hold to record, release to save, and send the reversed clip.'}
+              : 'Start recording when ready, stop to save the take, and send the reversed clip.'}
           </p>
         </div>
 
@@ -200,9 +200,8 @@ export function CreateRoundPanel({
             </div>
 
             <div className="button-row round-record-actions">
-              <HoldToRecordButton
+              <ToggleRecordButton
                 disabled={isSaving}
-                isPrepared={recorder.isPrepared}
                 isPreparing={recorder.isPreparing}
                 isRecording={recorder.isRecording}
                 onStart={recorder.startRecording}
@@ -216,14 +215,6 @@ export function CreateRoundPanel({
               >
                 Clear take
               </button>
-            </div>
-
-            <div className="helper-text round-screen-helper">
-              {isReversing
-                ? 'Turning your take backward now...'
-                : recorder.mimeType
-                  ? `Release to save. Format: ${recorder.mimeType}`
-                  : 'The microphone warms up on open so recording starts fast.'}
             </div>
 
             {isReversing ? (

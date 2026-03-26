@@ -275,7 +275,7 @@ export function useAudioRecorder(
         setAudioBlob(hasCapturedAudio ? nextBlob : null);
         setIsRecording(false);
         setError(
-          hasCapturedAudio ? null : 'No audio was captured. Try holding the button again.',
+          hasCapturedAudio ? null : 'No audio was captured. Try recording again.',
         );
       }
 

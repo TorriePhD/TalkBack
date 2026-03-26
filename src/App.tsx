@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { WaveformLoader } from './components/WaveformLoader';
 import { AuthPanel } from './features/auth/components/AuthPanel';
 import { CreateRoundPanel } from './features/rounds/components/CreateRoundPanel';
 import { HomePanel } from './features/rounds/components/HomePanel';
@@ -175,6 +176,37 @@ function mapArchivedRoundToFriend(friend: Friend, summary: ArchiveCompletedRound
   };
 }
 
+
+function LoadingPanel({ message }: { message: string }) {
+  const loaderPreviewLabel = message.toLowerCase().includes('revers')
+    ? 'Reversing audio...'
+    : 'Loading...';
+
+  return (
+    <section className="surface loader-panel" aria-live="polite" role="status">
+      <div className="loader-panel-preview" aria-hidden="true">
+        <WaveformLoader className="loader-panel-spinner" size={122} strokeWidth={4} />
+        <span className="loader-panel-preview-label">{loaderPreviewLabel}</span>
+      </div>
+      <div>
+        <strong>{message}</strong>
+        <p>The waveform path itself animates, so the energy travels around the ring instead of rotating a flat asset.</p>
+      </div>
+    </section>
+  );
+}
+
+function FullscreenLoadingScreen() {
+  return (
+    <main className="fullscreen-loader-screen" aria-live="polite" role="status">
+      <div className="fullscreen-loader-content">
+        <WaveformLoader className="fullscreen-loader-spinner" size={128} strokeWidth={4} />
+        <p>Loading...</p>
+      </div>
+    </main>
+  );
+}
+
 function DrawerButton({
   active = false,
   children,
@@ -263,9 +295,11 @@ function App() {
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const initialLoadRequestIdRef = useRef(0);
   const showSecureContextWarning =
     typeof window !== 'undefined' && !window.isSecureContext;
 
@@ -314,7 +348,10 @@ function App() {
     };
   }, []);
 
-  const refreshAppData = async () => {
+  const refreshAppData = async (options?: {
+    initialLoadRequestId?: number;
+    resolveInitialLoad?: boolean;
+  }) => {
     if (!currentUserId) {
       setProfile(null);
       setFriends([]);
@@ -346,6 +383,13 @@ function App() {
       );
     } finally {
       setIsLoadingData(false);
+
+      if (
+        options?.resolveInitialLoad &&
+        options.initialLoadRequestId === initialLoadRequestIdRef.current
+      ) {
+        setHasLoadedInitialData(true);
+      }
     }
   };
 
@@ -359,13 +403,19 @@ function App() {
       setView(DEFAULT_SIGNED_IN_VIEW);
       setIsMenuOpen(false);
       setIsComposingNextRound(false);
+      initialLoadRequestIdRef.current += 1;
+      setHasLoadedInitialData(false);
       return;
     }
+
+    initialLoadRequestIdRef.current += 1;
+    const initialLoadRequestId = initialLoadRequestIdRef.current;
 
     setView(DEFAULT_SIGNED_IN_VIEW);
     setIsMenuOpen(false);
     setIsComposingNextRound(false);
-    void refreshAppData();
+    setHasLoadedInitialData(false);
+    void refreshAppData({ initialLoadRequestId, resolveInitialLoad: true });
   }, [currentUserId]);
 
   useEffect(() => {
@@ -566,6 +616,13 @@ function App() {
     [threadSummaries],
   );
 
+  const showFullscreenLoader =
+    isAuthLoading || (Boolean(currentUserId) && !hasLoadedInitialData && !loadError);
+
+  if (showFullscreenLoader) {
+    return <FullscreenLoadingScreen />;
+  }
+
   return (
     <main className="app-shell">
       {!currentUserId && !isAuthLoading ? (
@@ -618,7 +675,7 @@ function App() {
       {loadError ? <div className="error-banner">{loadError}</div> : null}
 
       {isAuthLoading ? (
-        <div className="info-banner">Checking your Supabase session...</div>
+        <LoadingPanel message="Checking your Supabase session..." />
       ) : !currentUserId ? (
         <div className="stack">
           <AuthPanel />
@@ -692,7 +749,7 @@ function App() {
           ) : null}
 
           {isLoadingData ? (
-            <div className="info-banner">Loading your friends, threads, and scores...</div>
+            <LoadingPanel message="Loading your friends, threads, and scores..." />
           ) : null}
 
           <div className="stack">

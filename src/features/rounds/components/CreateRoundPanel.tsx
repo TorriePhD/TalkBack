@@ -3,6 +3,7 @@ import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import { HoldToRecordButton } from '../../../components/HoldToRecordButton';
+import { WaveformLoader } from '../../../components/WaveformLoader';
 import { createRoundRecord } from '../../../lib/rounds';
 import type { Friend } from '../../social/types';
 import type { Round } from '../types';
@@ -224,6 +225,20 @@ export function CreateRoundPanel({
                   ? `Release to save. Format: ${recorder.mimeType}`
                   : 'The microphone warms up on open so recording starts fast.'}
             </div>
+
+            {isReversing ? (
+              <div className="round-loader-callout" aria-live="polite" role="status">
+                <WaveformLoader
+                  className="round-loader-callout-spinner"
+                  size={92}
+                  strokeWidth={3.6}
+                />
+                <div>
+                  <strong>Reversing audio...</strong>
+                  <p>Building the flipped clip your friend will hear in the round.</p>
+                </div>
+              </div>
+            ) : null}
 
             <AudioPlayerCard
               title={reversedAudioBlob ? 'What your friend will hear' : 'Latest take'}

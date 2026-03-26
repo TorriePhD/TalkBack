@@ -107,6 +107,33 @@ p {
   padding: 16px 0 calc(40px + env(safe-area-inset-bottom));
 }
 
+.fullscreen-loader-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.fullscreen-loader-content {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.fullscreen-loader-content p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.fullscreen-loader-spinner {
+  width: 128px;
+  height: 128px;
+}
+
 .hero,
 .welcome-shell,
 .panel-grid,
@@ -927,6 +954,34 @@ p {
   margin-top: -4px;
 }
 
+.round-loader-callout {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(19, 33, 44, 0.08);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 250, 255, 0.82)),
+    rgba(255, 255, 255, 0.72);
+}
+
+.round-loader-callout strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.round-loader-callout p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.round-loader-callout-spinner {
+  width: 82px;
+  height: 82px;
+  flex: 0 0 auto;
+}
+
 .round-record-actions {
   align-items: stretch;
 }
@@ -1322,5 +1377,61 @@ p {
   .sticky-cta,
   .mobile-cta-bar {
     padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+.loader-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.8)),
+    rgba(255, 255, 255, 0.76);
+}
+
+.loader-panel-preview {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.loader-panel strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.loader-panel p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.loader-panel-preview-label {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(19, 33, 44, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--muted);
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.loader-panel-spinner {
+  width: 96px;
+  height: 96px;
+}
+
+.waveform-loader {
+  display: block;
+  overflow: visible;
+}
+
+@media (max-width: 640px) {
+  .round-loader-callout,
+  .loader-panel {
+    flex-direction: column;
+    text-align: center;
   }
 }

@@ -3,6 +3,7 @@ import { getPreferredAudioMimeType } from '../mime';
 
 interface UseAudioRecorderOptions {
   prepareOnMount?: boolean;
+  preparedStreamIdleMs?: number;
 }
 
 interface UseAudioRecorderResult {
@@ -87,9 +88,10 @@ async function getMicrophonePermissionState(): Promise<PermissionState | null> {
 export function useAudioRecorder(
   options: UseAudioRecorderOptions = {},
 ): UseAudioRecorderResult {
-  const { prepareOnMount = false } = options;
+  const { prepareOnMount = false, preparedStreamIdleMs = 1500 } = options;
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const idleReleaseTimeoutRef = useRef<number | null>(null);
   const preparePromiseRef = useRef<Promise<void> | null>(null);
   const prepareSequenceRef = useRef(0);
   const recordingSessionIdRef = useRef(0);
@@ -105,6 +107,15 @@ export function useAudioRecorder(
   const clearRecording = useCallback(() => {
     setAudioBlob(null);
     setError(null);
+  }, []);
+
+  const clearIdleReleaseTimeout = useCallback(() => {
+    if (typeof window === 'undefined' || idleReleaseTimeoutRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(idleReleaseTimeoutRef.current);
+    idleReleaseTimeoutRef.current = null;
   }, []);
 
   const stopRecording = useCallback(() => {
@@ -126,6 +137,7 @@ export function useAudioRecorder(
   }, []);
 
   const releaseRecordingResources = useCallback(() => {
+    clearIdleReleaseTimeout();
     recordingSessionIdRef.current += 1;
     recorderRef.current = null;
     stopStream(streamRef.current);
@@ -137,7 +149,28 @@ export function useAudioRecorder(
       setIsRecording(false);
       setIsPreparing(false);
     }
-  }, []);
+  }, [clearIdleReleaseTimeout]);
+
+  const schedulePreparedStreamRelease = useCallback(() => {
+    clearIdleReleaseTimeout();
+
+    if (typeof window === 'undefined' || preparedStreamIdleMs < 0 || !streamRef.current) {
+      return;
+    }
+
+    idleReleaseTimeoutRef.current = window.setTimeout(() => {
+      idleReleaseTimeoutRef.current = null;
+
+      const recorder = recorderRef.current;
+      if (recorder && recorder.state === 'recording') {
+        return;
+      }
+
+      if (streamRef.current) {
+        releaseRecordingResources();
+      }
+    }, preparedStreamIdleMs);
+  }, [clearIdleReleaseTimeout, preparedStreamIdleMs, releaseRecordingResources]);
 
   const prepareRecording = useCallback(async () => {
     if (typeof window === 'undefined') {
@@ -153,6 +186,7 @@ export function useAudioRecorder(
     if (streamRef.current) {
       setError(null);
       setIsPrepared(true);
+      schedulePreparedStreamRelease();
       return;
     }
 
@@ -170,6 +204,7 @@ export function useAudioRecorder(
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
+        schedulePreparedStreamRelease();
 
         if (isMountedRef.current) {
           setIsPrepared(true);
@@ -192,7 +227,7 @@ export function useAudioRecorder(
 
     preparePromiseRef.current = nextPromise;
     await nextPromise;
-  }, [releaseRecordingResources]);
+  }, [releaseRecordingResources, schedulePreparedStreamRelease]);
 
   const createRecorder = useCallback((stream: MediaStream) => {
     const preferredMimeType = getPreferredAudioMimeType();
@@ -214,6 +249,7 @@ export function useAudioRecorder(
     const sessionId = ++recordingSessionIdRef.current;
     const sessionChunks: Blob[] = [];
     recorderRef.current = recorder;
+    clearIdleReleaseTimeout();
     setMimeType(recorder.mimeType || preferredMimeType || null);
 
     recorder.addEventListener('dataavailable', (event) => {
@@ -244,6 +280,7 @@ export function useAudioRecorder(
       }
 
       recorderRef.current = null;
+      schedulePreparedStreamRelease();
     });
 
     recorder.addEventListener('error', (event) => {
@@ -263,7 +300,7 @@ export function useAudioRecorder(
     });
 
     return recorder;
-  }, [releaseRecordingResources]);
+  }, [clearIdleReleaseTimeout, releaseRecordingResources, schedulePreparedStreamRelease]);
 
   const startRecording = useCallback(async () => {
     if (typeof window === 'undefined') {

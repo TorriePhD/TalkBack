@@ -1122,10 +1122,83 @@ p {
   color: var(--muted);
 }
 
-.audio-card audio {
-  width: 100%;
-  min-height: 42px;
-  border-radius: 14px;
+.audio-card-player-wrap {
+  display: grid;
+  place-items: center;
+  padding: 6px 0 2px;
+}
+
+.waveform-play-button {
+  --wpb-size: 80px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: var(--wpb-size);
+  height: var(--wpb-size);
+  border-radius: 999px;
+  padding: 0;
+  position: relative;
+  display: grid;
+  place-items: center;
+  transition: transform 180ms ease, filter 220ms ease;
+  filter: drop-shadow(0 7px 18px rgba(77, 121, 255, 0.2));
+}
+
+.waveform-play-button:hover {
+  transform: scale(1.03);
+  filter: drop-shadow(0 10px 26px rgba(241, 44, 180, 0.24));
+}
+
+.waveform-play-button:focus-visible {
+  outline: 2px solid rgba(27, 141, 255, 0.9);
+  outline-offset: 4px;
+}
+
+.waveform-play-button-svg {
+  display: block;
+}
+
+.waveform-play-button-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.waveform-icon-play {
+  width: 0;
+  height: 0;
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+  border-left: 16px solid rgba(19, 33, 44, 0.88);
+  transform: translateX(2px);
+  transition: opacity 190ms ease, transform 220ms ease;
+}
+
+.waveform-icon-pause {
+  position: absolute;
+  display: inline-flex;
+  gap: 7px;
+  opacity: 0;
+  transform: scale(0.78);
+  transition: opacity 190ms ease, transform 220ms ease;
+}
+
+.waveform-icon-pause span {
+  width: 5px;
+  height: 19px;
+  border-radius: 999px;
+  background: rgba(19, 33, 44, 0.88);
+}
+
+.waveform-play-button.is-playing .waveform-icon-play {
+  opacity: 0;
+  transform: scale(0.72) translateX(4px);
+}
+
+.waveform-play-button.is-playing .waveform-icon-pause {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .audio-card .fine-print {

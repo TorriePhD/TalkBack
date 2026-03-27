@@ -1449,6 +1449,7 @@ p {
 
 .auth-brand-logo {
   display: block;
+  margin-inline: auto;
   height: 54px;
   width: auto;
   max-width: min(260px, 72vw);

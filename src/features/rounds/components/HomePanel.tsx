@@ -116,20 +116,18 @@ export function HomePanel({
                 </div>
               </div>
 
-              {friend.isYourTurn ? (
-                <div className="game-actions">
-                  <button
-                    className="button primary game-action-button"
-                    onClick={() => {
-                      onOpenFriend?.(friend.id);
-                    }}
-                    type="button"
-                  >
-                    <PlayIcon />
-                    <span>Take Turn</span>
-                  </button>
-                </div>
-              ) : null}
+              <div className="game-actions">
+                <button
+                  className="button primary game-action-button"
+                  onClick={() => {
+                    onOpenFriend?.(friend.id);
+                  }}
+                  type="button"
+                >
+                  <PlayIcon />
+                  <span>{friend.isYourTurn ? 'Take Turn' : 'Their Turn'}</span>
+                </button>
+              </div>
             </div>
           ))}
         </div>

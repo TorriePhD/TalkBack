@@ -26,6 +26,10 @@ function toPolarPoint(radius: number, theta: number, center: number) {
   };
 }
 
+function triangleWave(phase: number) {
+  return (2 / Math.PI) * Math.asin(Math.sin(phase));
+}
+
 function usePrefersReducedMotion() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
@@ -102,7 +106,7 @@ export function WaveformPlayButton({
   const [isPlaying, setIsPlaying] = useState(false);
   const prefersReducedMotion = usePrefersReducedMotion();
 
-  const segmentCount = useMemo(() => (prefersReducedMotion ? 84 : 120), [prefersReducedMotion]);
+  const segmentCount = useMemo(() => (prefersReducedMotion ? 96 : 180), [prefersReducedMotion]);
 
   const initialPath = useMemo(() => {
     const { baseRadius } = getBaseRadius(size, strokeWidth, intensity);
@@ -178,8 +182,8 @@ export function WaveformPlayButton({
 
     if (!analyserRef.current && audioContextRef.current) {
       const analyser = audioContextRef.current.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.75;
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.42;
       analyserRef.current = analyser;
       frequencyRef.current = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
       smoothedRef.current = new Float32Array(segmentCount);
@@ -222,20 +226,24 @@ export function WaveformPlayButton({
 
         if (analyser && frequencyData && smoothed && isPlaying && !prefersReducedMotion) {
           analyser.getByteFrequencyData(frequencyData);
-          const amplitude = 20 * intensity * progress;
+          const amplitude = 24 * intensity * progress;
           const minRadius = strokeWidth * 0.9;
 
           for (let i = 0; i < segmentCount; i += 1) {
             const frequencyIndex = Math.floor((i / segmentCount) * frequencyData.length);
             const normalized = frequencyData[frequencyIndex] / 255;
             const current = smoothed[i] ?? 0;
-            const smoothValue = current + (normalized - current) * 0.24;
+            const smoothValue = current + (normalized - current) * 0.58;
             smoothed[i] = smoothValue;
 
             const theta = (i / segmentCount) * FULL_CIRCLE;
-            const spatialWeight = 0.86 + 0.14 * Math.cos(theta * 2 - now * 0.0008);
-            const drift = 0.88 + 0.12 * Math.sin(now * 0.0014 + theta * 4.8);
-            const offset = amplitude * smoothValue * spatialWeight * drift;
+            const ridgePhase = theta * 26 - now * 0.0062;
+            const ridge = Math.max(0, triangleWave(ridgePhase)) ** 0.52;
+            const spatialWeight = 0.82 + 0.18 * Math.cos(theta * 2.6 - now * 0.0011);
+            const drift = 0.84 + 0.16 * Math.sin(now * 0.0016 + theta * 5.6);
+            const emphasized = 0.34 * smoothValue + 0.66 * smoothValue ** 0.68;
+            const spikyEnergy = emphasized * (0.64 + ridge * 0.92);
+            const offset = amplitude * spikyEnergy * spatialWeight * drift;
             radii[i] = clamp(baseRadius + offset, minRadius, safeOuterRadius);
           }
         } else {

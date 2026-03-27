@@ -1447,6 +1447,14 @@ p {
   margin: 0 auto;
 }
 
+.auth-brand-logo {
+  display: block;
+  height: 54px;
+  width: auto;
+  max-width: min(260px, 72vw);
+  object-fit: contain;
+}
+
 .create-summary-card {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 244, 248, 0.9)),

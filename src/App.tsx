@@ -148,6 +148,7 @@ function FullscreenLoadingScreen() {
   return (
     <main className="fullscreen-loader-screen" aria-live="polite" role="status">
       <div className="fullscreen-loader-content">
+        <img alt="BackTalk" className="fullscreen-loader-logo" src={homeLogo} />
         <WaveformLoader className="fullscreen-loader-spinner" size={128} strokeWidth={4} />
         <p>Loading...</p>
       </div>

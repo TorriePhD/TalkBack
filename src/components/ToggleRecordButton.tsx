@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { WaveformPlayButton } from './WaveformPlayButton';
 
 interface ToggleRecordButtonProps {
   disabled?: boolean;
@@ -6,6 +7,7 @@ interface ToggleRecordButtonProps {
   isRecording: boolean;
   onStart: () => Promise<void> | void;
   onStop: () => void;
+  liveStream: MediaStream | null;
 }
 
 function formatDuration(durationMs: number) {
@@ -22,6 +24,7 @@ export function ToggleRecordButton({
   isRecording,
   onStart,
   onStop,
+  liveStream,
 }: ToggleRecordButtonProps) {
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
 
@@ -58,16 +61,20 @@ export function ToggleRecordButton({
 
   return (
     <div className="round-record-button-stack">
-      <button
-        aria-label={isRecording ? 'Stop recording' : 'Start recording'}
-        aria-pressed={isRecording}
-        className={`button primary record-button ${isRecording ? 'recording' : ''}`}
-        disabled={disabled || isPreparing}
-        onClick={handleClick}
-        type="button"
-      >
-        <span className="record-button-core" aria-hidden="true" />
-      </button>
+      <div className={`record-button-shell ${disabled || isPreparing ? 'is-disabled' : ''}`}>
+        <WaveformPlayButton
+          activeAriaLabel="Stop recording"
+          className="record-button"
+          inactiveAriaLabel="Start recording"
+          intensity={3.2}
+          isActive={isRecording}
+          liveStream={liveStream}
+          mode="record"
+          onPress={handleClick}
+          size={144}
+          strokeWidth={5}
+        />
+      </div>
 
       <div className="record-button-status" aria-live="polite" role="status">
         {isPreparing ? (

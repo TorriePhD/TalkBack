@@ -4,7 +4,7 @@ const FULL_CIRCLE = Math.PI * 2;
 const TARGET_FRAME_MS = 1000 / 48;
 
 interface WaveformPlayButtonProps {
-  src: string;
+  src?: string;
   size?: number;
   strokeWidth?: number;
   className?: string;
@@ -13,6 +13,12 @@ interface WaveformPlayButtonProps {
   onPause?: () => void;
   onEnd?: () => void;
   intensity?: number;
+  mode?: 'playback' | 'record';
+  isActive?: boolean;
+  onPress?: () => void;
+  activeAriaLabel?: string;
+  inactiveAriaLabel?: string;
+  liveStream?: MediaStream | null;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -73,7 +79,7 @@ function buildCircularPath(size: number, strokeWidth: number, radii: number[]) {
 function getBaseRadius(size: number, strokeWidth: number, intensity: number) {
   const center = size / 2;
   const safeOuterRadius = center - strokeWidth * 0.5 - 0.5;
-  const maxAmplitude = 13 * clamp(intensity, 0.4, 2.2);
+  const maxAmplitude = 16 * clamp(intensity, 0.4, 4);
   return {
     baseRadius: clamp(safeOuterRadius - maxAmplitude - 1, strokeWidth + 3, safeOuterRadius),
     safeOuterRadius,
@@ -90,13 +96,19 @@ export function WaveformPlayButton({
   onPause,
   onEnd,
   intensity = 1,
+  mode = 'playback',
+  isActive = false,
+  onPress,
+  activeAriaLabel = 'Stop recording',
+  inactiveAriaLabel = 'Start recording',
+  liveStream = null,
 }: WaveformPlayButtonProps) {
   const gradientId = useId();
   const pathRef = useRef<SVGPathElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | MediaStreamAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const frequencyRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const smoothedRef = useRef<Float32Array | null>(null);
@@ -115,6 +127,15 @@ export function WaveformPlayButton({
   }, [segmentCount, size, strokeWidth, intensity]);
 
   useEffect(() => {
+    if (mode !== 'playback' || !src) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      setIsPlaying(false);
+      motionTargetRef.current = 0;
+      return;
+    }
+
     const audio = document.createElement('audio');
     audio.preload = 'metadata';
     audio.src = src;
@@ -153,19 +174,19 @@ export function WaveformPlayButton({
       audio.load();
       audioRef.current = null;
     };
-  }, [src, onEnd, onPause, onPlay]);
+  }, [mode, src, onEnd, onPause, onPlay]);
 
   useEffect(() => {
-    if (!autoPlay || !audioRef.current) {
+    if (mode !== 'playback' || !autoPlay || !audioRef.current) {
       return;
     }
 
     void audioRef.current.play().catch(() => {
       // Ignore autoplay restrictions.
     });
-  }, [autoPlay, src]);
+  }, [autoPlay, mode, src]);
 
-  const initializeAudioGraph = () => {
+  const initializePlaybackAudioGraph = () => {
     const audio = audioRef.current;
     if (!audio || typeof window === 'undefined') {
       return;
@@ -193,6 +214,34 @@ export function WaveformPlayButton({
       sourceRef.current = audioContextRef.current.createMediaElementSource(audio);
       sourceRef.current.connect(analyserRef.current);
       analyserRef.current.connect(audioContextRef.current.destination);
+    }
+  };
+
+  const initializeLiveAudioGraph = () => {
+    if (typeof window === 'undefined' || !liveStream) {
+      return;
+    }
+
+    if (!audioContextRef.current) {
+      const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextCtor) {
+        return;
+      }
+      audioContextRef.current = new AudioContextCtor();
+    }
+
+    if (!analyserRef.current && audioContextRef.current) {
+      const analyser = audioContextRef.current.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.26;
+      analyserRef.current = analyser;
+      frequencyRef.current = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
+      smoothedRef.current = new Float32Array(segmentCount);
+    }
+
+    if (!sourceRef.current && analyserRef.current && audioContextRef.current) {
+      sourceRef.current = audioContextRef.current.createMediaStreamSource(liveStream);
+      sourceRef.current.connect(analyserRef.current);
     }
   };
 
@@ -224,9 +273,11 @@ export function WaveformPlayButton({
         const frequencyData = frequencyRef.current;
         const smoothed = smoothedRef.current;
 
-        if (analyser && frequencyData && smoothed && isPlaying && !prefersReducedMotion) {
+        const hasAnimatedAudio = mode === 'playback' ? isPlaying : isActive;
+
+        if (analyser && frequencyData && smoothed && hasAnimatedAudio && !prefersReducedMotion) {
           analyser.getByteFrequencyData(frequencyData);
-          const amplitude = 24 * intensity * progress;
+          const amplitude = (mode === 'record' ? 42 : 24) * intensity * progress;
           const minRadius = strokeWidth * 0.9;
 
           for (let i = 0; i < segmentCount; i += 1) {
@@ -237,12 +288,14 @@ export function WaveformPlayButton({
             smoothed[i] = smoothValue;
 
             const theta = (i / segmentCount) * FULL_CIRCLE;
-            const ridgePhase = theta * 26 - now * 0.0062;
+            const ridgePhase = theta * (mode === 'record' ? 33 : 26) - now * (mode === 'record' ? 0.0084 : 0.0062);
             const ridge = Math.max(0, triangleWave(ridgePhase)) ** 0.52;
             const spatialWeight = 0.82 + 0.18 * Math.cos(theta * 2.6 - now * 0.0011);
             const drift = 0.84 + 0.16 * Math.sin(now * 0.0016 + theta * 5.6);
-            const emphasized = 0.34 * smoothValue + 0.66 * smoothValue ** 0.68;
-            const spikyEnergy = emphasized * (0.64 + ridge * 0.92);
+            const emphasized = mode === 'record'
+              ? 0.12 * smoothValue + 0.88 * smoothValue ** 0.56
+              : 0.34 * smoothValue + 0.66 * smoothValue ** 0.68;
+            const spikyEnergy = emphasized * (mode === 'record' ? 0.92 + ridge * 1.2 : 0.64 + ridge * 0.92);
             const offset = amplitude * spikyEnergy * spatialWeight * drift;
             radii[i] = clamp(baseRadius + offset, minRadius, safeOuterRadius);
           }
@@ -271,7 +324,7 @@ export function WaveformPlayButton({
       }
       rafRef.current = null;
     };
-  }, [initialPath, intensity, isPlaying, prefersReducedMotion, segmentCount, size, strokeWidth]);
+  }, [initialPath, intensity, isActive, isPlaying, mode, prefersReducedMotion, segmentCount, size, strokeWidth]);
 
   useEffect(() => {
     return () => {
@@ -294,7 +347,7 @@ export function WaveformPlayButton({
     }
 
     if (audio.paused || audio.ended) {
-      initializeAudioGraph();
+      initializePlaybackAudioGraph();
 
       if (audioContextRef.current?.state === 'suspended') {
         await audioContextRef.current.resume();
@@ -307,15 +360,46 @@ export function WaveformPlayButton({
     audio.pause();
   };
 
-  const composedClassName = ['waveform-play-button', isPlaying ? 'is-playing' : '', className]
+  useEffect(() => {
+    if (mode !== 'record') {
+      return;
+    }
+
+    motionTargetRef.current = isActive ? 1 : 0;
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+      sourceRef.current = null;
+    }
+    initializeLiveAudioGraph();
+
+    if (audioContextRef.current?.state === 'suspended') {
+      void audioContextRef.current.resume().catch(() => {
+        // Ignore resume failures without user gesture.
+      });
+    }
+  }, [isActive, liveStream, mode, segmentCount]);
+
+  const showActiveState = mode === 'playback' ? isPlaying : isActive;
+
+  const composedClassName = [
+    'waveform-play-button',
+    showActiveState ? 'is-playing' : '',
+    mode === 'record' ? 'is-record-control' : '',
+    className,
+  ]
     .filter(Boolean)
     .join(' ');
 
   return (
     <button
-      aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
+      aria-label={mode === 'playback' ? (isPlaying ? 'Pause audio' : 'Play audio') : showActiveState ? activeAriaLabel : inactiveAriaLabel}
       className={composedClassName}
       onClick={() => {
+        if (mode === 'record') {
+          onPress?.();
+          return;
+        }
+
         void togglePlayback().catch(() => {
           // Playback can fail without user gesture or with invalid audio URL.
         });
@@ -361,11 +445,20 @@ export function WaveformPlayButton({
       </svg>
 
       <span className="waveform-play-button-icon" aria-hidden="true">
-        <span className="waveform-icon-play" />
-        <span className="waveform-icon-pause">
-          <span />
-          <span />
-        </span>
+        {mode === 'record' ? (
+          <>
+            <span className="waveform-icon-record" />
+            <span className="waveform-icon-stop" />
+          </>
+        ) : (
+          <>
+            <span className="waveform-icon-play" />
+            <span className="waveform-icon-pause">
+              <span />
+              <span />
+            </span>
+          </>
+        )}
       </span>
     </button>
   );

@@ -1013,47 +1013,15 @@ p {
   align-self: center;
 }
 
+.record-button-shell.is-disabled {
+  opacity: 0.64;
+  pointer-events: none;
+}
+
 .record-button {
   width: 144px;
   height: 144px;
   min-height: 144px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #ff5f57, #d91f1f);
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.22),
-    0 18px 32px rgba(186, 16, 16, 0.28);
-}
-
-.record-button:hover {
-  background: linear-gradient(180deg, #ff6a61, #df2626);
-}
-
-.record-button.recording {
-  background: linear-gradient(180deg, #ff4b4b, #bf1111);
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.18),
-    0 18px 34px rgba(173, 10, 10, 0.32);
-}
-
-.record-button:disabled {
-  transform: none;
-}
-
-.record-button-core {
-  width: 62px;
-  height: 62px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #7c0d0d, #470000);
-  box-shadow:
-    inset 0 6px 12px rgba(255, 255, 255, 0.08),
-    inset 0 -10px 16px rgba(0, 0, 0, 0.22);
-}
-
-.record-button.recording .record-button-core {
-  width: 58px;
-  height: 58px;
 }
 
 .record-button-status {
@@ -1191,12 +1159,41 @@ p {
   background: rgba(19, 33, 44, 0.88);
 }
 
+.waveform-icon-record {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(19, 33, 44, 0.88);
+  transition: opacity 190ms ease, transform 220ms ease;
+}
+
+.waveform-icon-stop {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(19, 33, 44, 0.88);
+  opacity: 0;
+  transform: scale(0.76);
+  transition: opacity 190ms ease, transform 220ms ease;
+}
+
 .waveform-play-button.is-playing .waveform-icon-play {
   opacity: 0;
   transform: scale(0.72) translateX(4px);
 }
 
 .waveform-play-button.is-playing .waveform-icon-pause {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.waveform-play-button.is-playing .waveform-icon-record {
+  opacity: 0;
+  transform: scale(0.72);
+}
+
+.waveform-play-button.is-playing .waveform-icon-stop {
   opacity: 1;
   transform: scale(1);
 }

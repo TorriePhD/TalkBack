@@ -95,6 +95,7 @@ export function WaveformPlayButton({
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const frequencyRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const timeDomainRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const smoothedRef = useRef<Float32Array | null>(null);
   const motionTargetRef = useRef(0);
   const motionProgressRef = useRef(0);
@@ -178,10 +179,11 @@ export function WaveformPlayButton({
 
     if (!analyserRef.current && audioContextRef.current) {
       const analyser = audioContextRef.current.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.75;
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.82;
       analyserRef.current = analyser;
       frequencyRef.current = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
+      timeDomainRef.current = new Uint8Array(analyser.fftSize) as Uint8Array<ArrayBuffer>;
       smoothedRef.current = new Float32Array(segmentCount);
     }
 
@@ -218,18 +220,23 @@ export function WaveformPlayButton({
         const radii = new Array<number>(segmentCount);
         const analyser = analyserRef.current;
         const frequencyData = frequencyRef.current;
+        const timeDomainData = timeDomainRef.current;
         const smoothed = smoothedRef.current;
 
-        if (analyser && frequencyData && smoothed && isPlaying && !prefersReducedMotion) {
+        if (analyser && frequencyData && timeDomainData && smoothed && isPlaying && !prefersReducedMotion) {
           analyser.getByteFrequencyData(frequencyData);
+          analyser.getByteTimeDomainData(timeDomainData);
           const amplitude = 13.5 * intensity * progress;
           const minRadius = strokeWidth * 0.9;
 
           for (let i = 0; i < segmentCount; i += 1) {
             const frequencyIndex = Math.floor((i / segmentCount) * frequencyData.length);
             const normalized = frequencyData[frequencyIndex] / 255;
+            const sampleIndex = Math.floor((i / segmentCount) * timeDomainData.length);
+            const waveformMagnitude = Math.abs((timeDomainData[sampleIndex] - 128) / 128);
+            const blended = clamp(normalized * 0.5 + waveformMagnitude * 1.15, 0, 1.35);
             const current = smoothed[i] ?? 0;
-            const smoothValue = current + (normalized - current) * 0.24;
+            const smoothValue = current + (blended - current) * 0.24;
             smoothed[i] = smoothValue;
 
             const theta = (i / segmentCount) * FULL_CIRCLE;

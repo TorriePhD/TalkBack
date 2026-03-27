@@ -1122,14 +1122,81 @@ p {
   color: var(--muted);
 }
 
-.audio-card audio {
-  width: 100%;
-  min-height: 42px;
-  border-radius: 14px;
+.audio-card-playback {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 6px;
 }
 
 .audio-card .fine-print {
-  margin-top: 10px;
+  margin-top: 0;
+  text-align: center;
+}
+
+.waveform-play-button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #f7fbff;
+  cursor: pointer;
+  border-radius: 999px;
+  transition: transform 160ms ease, filter 180ms ease;
+}
+
+.waveform-play-button:hover {
+  transform: translateY(-1px) scale(1.02);
+}
+
+.waveform-play-button:focus-visible {
+  outline: 2px solid rgba(27, 141, 255, 0.65);
+  outline-offset: 4px;
+}
+
+.waveform-play-button.is-pressed {
+  transform: scale(0.98);
+}
+
+.waveform-play-button__svg {
+  display: block;
+  filter: drop-shadow(0 10px 18px rgba(18, 50, 94, 0.18));
+}
+
+.waveform-play-button__icon {
+  position: absolute;
+  color: #ffffff;
+  opacity: 0.92;
+  transform: translateX(1px) scale(1);
+  transition: opacity 220ms ease, transform 220ms ease;
+  pointer-events: none;
+}
+
+.waveform-play-button.is-playing {
+  filter: drop-shadow(0 0 14px rgba(102, 143, 255, 0.28));
+}
+
+.waveform-play-button.is-playing .waveform-play-button__icon {
+  opacity: 0.18;
+  transform: translateX(1px) scale(0.74);
+}
+
+.waveform-play-button--compact {
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waveform-play-button,
+  .waveform-play-button:hover,
+  .waveform-play-button.is-pressed {
+    transform: none;
+  }
+
+  .waveform-play-button__icon {
+    transition-duration: 120ms;
+  }
 }
 
 .pill-row,

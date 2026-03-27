@@ -76,10 +76,11 @@ function buildCircularPath(size: number, strokeWidth: number, radii: number[]) {
   return `${commands.join(' ')} Z`;
 }
 
-function getBaseRadius(size: number, strokeWidth: number, intensity: number) {
+function getBaseRadius(size: number, strokeWidth: number, intensity: number, mode: 'playback' | 'record') {
   const center = size / 2;
   const safeOuterRadius = center - strokeWidth * 0.5 - 0.5;
-  const maxAmplitude = 16 * clamp(intensity, 0.4, 4);
+  const effectiveIntensity = mode === 'record' ? 1 : intensity;
+  const maxAmplitude = 16 * clamp(effectiveIntensity, 0.4, 4);
   return {
     baseRadius: clamp(safeOuterRadius - maxAmplitude - 1, strokeWidth + 3, safeOuterRadius),
     safeOuterRadius,
@@ -121,10 +122,10 @@ export function WaveformPlayButton({
   const segmentCount = useMemo(() => (prefersReducedMotion ? 96 : 180), [prefersReducedMotion]);
 
   const initialPath = useMemo(() => {
-    const { baseRadius } = getBaseRadius(size, strokeWidth, intensity);
+    const { baseRadius } = getBaseRadius(size, strokeWidth, intensity, mode);
     const radii = Array.from({ length: segmentCount }, () => baseRadius);
     return buildCircularPath(size, strokeWidth, radii);
-  }, [segmentCount, size, strokeWidth, intensity]);
+  }, [segmentCount, size, strokeWidth, intensity, mode]);
 
   useEffect(() => {
     if (mode !== 'playback' || !src) {
@@ -261,7 +262,7 @@ export function WaveformPlayButton({
 
     const draw = (now: number) => {
       if (!lastFrameAtRef.current || now - lastFrameAtRef.current > TARGET_FRAME_MS) {
-        const { baseRadius, safeOuterRadius } = getBaseRadius(size, strokeWidth, intensity);
+        const { baseRadius, safeOuterRadius } = getBaseRadius(size, strokeWidth, intensity, mode);
         const progressTarget = motionTargetRef.current;
         const previousProgress = motionProgressRef.current;
         const easing = progressTarget > previousProgress ? 0.16 : 0.1;

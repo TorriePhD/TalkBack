@@ -204,7 +204,6 @@ export function CreateRoundPanel({
                 disabled={isSaving}
                 isPreparing={recorder.isPreparing}
                 isRecording={recorder.isRecording}
-                liveStream={recorder.liveStream}
                 onStart={recorder.startRecording}
                 onStop={recorder.stopRecording}
               />

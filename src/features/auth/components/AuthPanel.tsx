@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { signInWithIdentifier, signUpWithEmail } from '../../../lib/auth';
 import { supabaseConfigError } from '../../../lib/supabase';
+import homeLogo from '../../../assets/backtalk-logo.png';
 
 type AuthMode = 'login' | 'register';
 
@@ -85,7 +86,7 @@ export function AuthPanel() {
     <section className="surface auth-shell">
       <div className="section-header">
         <div>
-          <div className="eyebrow">BackTalk</div>
+          <img alt="BackTalk" className="auth-brand-logo" src={homeLogo} />
           <h2>{mode === 'login' ? 'Sign in' : 'Create account'}</h2>
         </div>
       </div>

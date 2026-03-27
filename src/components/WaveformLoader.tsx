@@ -104,8 +104,6 @@ function buildWaveformPath(config: WaveformPathConfig, timeSeconds: number) {
   const activeArcWidth = clamp(config.activeArcWidth, Math.PI / 16, Math.PI * 1.35);
   const activeCenter = (timeSeconds * travelSpeed + Math.PI * 0.16) % FULL_CIRCLE;
   const activeSigma = Math.max(activeArcWidth / 2.35, 0.001);
-  const globalPhase = timeSeconds * (travelSpeed * 5.8 + 1.6);
-  const activePhase = timeSeconds * (travelSpeed * 7.6 + 2.1);
   const subtlePulse = 0.94 + 0.06 * Math.sin(timeSeconds * 1.55);
   const minRadius = config.strokeWidth * 0.85;
   const commands = new Array<string>(segmentTotal + 1);
@@ -117,12 +115,10 @@ function buildWaveformPath(config: WaveformPathConfig, timeSeconds: number) {
     // A wrapped gaussian envelope keeps one arc visibly louder while the rest stays restrained.
     const envelope = Math.exp(-0.5 * Math.pow(wrappedDistance / activeSigma, 2));
     const baseCarrierPhase =
-      theta * waveformFrequency -
-      globalPhase +
+      theta * waveformFrequency +
       0.24 * Math.sin(theta * 3.3 - timeSeconds * 0.85);
     const activeCarrierPhase =
-      theta * waveformFrequency * 1.14 -
-      activePhase +
+      theta * waveformFrequency * 1.14 +
       envelope * 1.15 -
       wrappedDistance * 0.65;
 

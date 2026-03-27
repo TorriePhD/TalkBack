@@ -1122,101 +1122,14 @@ p {
   color: var(--muted);
 }
 
-.audio-card-player {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-  padding-top: 2px;
+.audio-card audio {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 14px;
 }
 
 .audio-card .fine-print {
-  margin-top: 0;
-  text-align: center;
-}
-
-.waveform-play-button {
-  --waveform-button-size: 80px;
-  width: var(--waveform-button-size);
-  height: var(--waveform-button-size);
-  min-height: var(--waveform-button-size);
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  display: inline-grid;
-  place-items: center;
-  background: transparent;
-  box-shadow: 0 0 0 0 rgba(102, 115, 255, 0);
-  transition:
-    transform 180ms ease,
-    filter 220ms ease,
-    box-shadow 220ms ease;
-}
-
-.audio-card-waveform-button {
-  --waveform-button-size: 92px;
-}
-
-.waveform-play-button svg {
-  display: block;
-  overflow: visible;
-  filter: drop-shadow(0 8px 18px rgba(52, 79, 196, 0.2));
-}
-
-.waveform-play-button:hover:not(:disabled) {
-  transform: scale(1.04);
-  box-shadow: 0 0 0 8px rgba(77, 121, 255, 0.09);
-  filter: brightness(1.02);
-}
-
-.waveform-play-button:focus-visible {
-  outline: 3px solid rgba(57, 108, 255, 0.35);
-  outline-offset: 4px;
-}
-
-.waveform-play-button:disabled {
-  opacity: 0.5;
-  filter: grayscale(0.35);
-  cursor: not-allowed;
-}
-
-.waveform-play-button-icon {
-  fill: rgba(19, 33, 44, 0.85);
-}
-
-.waveform-play-icon,
-.waveform-pause-icon {
-  transform-origin: center;
-  transition:
-    opacity 220ms ease,
-    transform 220ms ease;
-}
-
-.waveform-play-icon {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.waveform-pause-icon {
-  opacity: 0;
-  transform: scale(0.72);
-}
-
-.waveform-play-button-icon.is-playing .waveform-play-icon {
-  opacity: 0;
-  transform: scale(0.7);
-}
-
-.waveform-play-button-icon.is-playing .waveform-pause-icon {
-  opacity: 1;
-  transform: scale(1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .waveform-play-button,
-  .waveform-play-icon,
-  .waveform-pause-icon {
-    transition-duration: 0.01ms;
-  }
+  margin-top: 10px;
 }
 
 .pill-row,

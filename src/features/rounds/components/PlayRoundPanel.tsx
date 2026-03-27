@@ -280,26 +280,14 @@ export function PlayRoundPanel({
   const reviewAudioGrid = (
     <div className="audio-grid">
       <AudioPlayerCard
-        title="Your original prompt"
-        description="The forward recording that started this round."
-        blob={round.originalAudioBlob}
-        remoteUrl={round.originalAudioUrl}
-      />
-      <AudioPlayerCard
-        title="Your reversed prompt"
-        description="The backward clip your friend heard before imitating it."
-        blob={round.reversedAudioBlob}
-        remoteUrl={round.reversedAudioUrl}
-      />
-      <AudioPlayerCard
         title="Their imitation"
-        description="Your friend's attempt at copying the reversed prompt."
+        description="Your friend's attempt."
         blob={round.attemptAudioBlob}
         remoteUrl={round.attemptAudioUrl}
       />
       <AudioPlayerCard
         title="Their imitation reversed"
-        description="The flipped version they used when making their guess."
+        description="What they listened to before guessing."
         blob={round.attemptReversedBlob}
         remoteUrl={round.attemptReversedUrl}
       />
@@ -314,7 +302,7 @@ export function PlayRoundPanel({
         </button>
 
         <div className="round-screen-copy">
-          <div className="eyebrow">{isRecipient ? getRecipientStepLabel(recipientStage) : 'Round Review'}</div>
+          <div className="eyebrow">{isRecipient ? getRecipientStepLabel(recipientStage) : 'Review'}</div>
           <h2>{roundSummary?.headline ?? 'Round'}</h2>
           <p>{roundSummary?.description}</p>
         </div>
@@ -456,13 +444,8 @@ export function PlayRoundPanel({
           {round.status === 'attempted' ? (
             <div className="round-screen-step">
               <div className="result-box">
-                <p>
-                  <strong>Phrase:</strong> {round.correctPhrase}
-                </p>
                 <p>{roundSummary?.callToAction}</p>
               </div>
-
-              {reviewAudioGrid}
             </div>
           ) : null}
 

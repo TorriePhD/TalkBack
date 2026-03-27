@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
 import { useObjectUrl } from '../audio/hooks/useObjectUrl';
+import { WaveformPlayButton } from './WaveformPlayButton';
 
 interface AudioPlayerCardProps {
   title: string;
@@ -16,34 +16,6 @@ export function AudioPlayerCard({
 }: AudioPlayerCardProps) {
   const objectUrl = useObjectUrl(blob);
   const src = objectUrl ?? remoteUrl ?? null;
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    const audioElement = audioRef.current;
-    if (!audioElement) {
-      return;
-    }
-
-    audioElement.pause();
-
-    if (src) {
-      audioElement.src = src;
-    } else {
-      audioElement.removeAttribute('src');
-    }
-
-    audioElement.load();
-  }, [src]);
-
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.removeAttribute('src');
-        audioRef.current.load();
-      }
-    };
-  }, []);
 
   return (
     <article className="audio-card">
@@ -58,7 +30,9 @@ export function AudioPlayerCard({
       </div>
       <p>{description}</p>
       {src ? (
-        <audio key={src} ref={audioRef} controls preload="metadata" />
+        <div className="audio-card-player-wrap">
+          <WaveformPlayButton className="audio-card-player" size={86} src={src} />
+        </div>
       ) : (
         <div className="empty-state compact-empty">No audio available yet.</div>
       )}

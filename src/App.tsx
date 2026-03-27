@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import homeLogo from './assets/backtalk-logo.png';
 import { WaveformLoader } from './components/WaveformLoader';
 import { AuthPanel } from './features/auth/components/AuthPanel';
 import { CreateRoundPanel } from './features/rounds/components/CreateRoundPanel';
@@ -19,7 +20,6 @@ import { archiveCompletedRound, listRounds } from './lib/rounds';
 import { supabaseConfigError } from './lib/supabase';
 
 type View = 'home' | 'thread' | 'friends';
-type FriendStatusTone = 'primary' | 'waiting' | 'active' | 'complete';
 
 interface ThreadSummary {
   activeRound: Round | null;
@@ -32,8 +32,6 @@ interface ThreadSummary {
   latestRound: Round | null;
   reviewRound: Round | null;
   roundCount: number;
-  statusLabel: string;
-  statusTone: FriendStatusTone;
 }
 
 const DEFAULT_SIGNED_IN_VIEW: View = 'home';
@@ -47,72 +45,6 @@ function isRoundForFriend(round: Round, currentUserId: string, friendId: string)
     (round.senderId === currentUserId && round.recipientId === friendId) ||
     (round.senderId === friendId && round.recipientId === currentUserId)
   );
-}
-
-function getThreadStatus(options: {
-  activeRound: Round | null;
-  canCurrentUserStart: boolean;
-  canRecipientComposeNext: boolean;
-  currentUserId: string;
-  reviewRound: Round | null;
-}) {
-  const {
-    activeRound,
-    canCurrentUserStart,
-    canRecipientComposeNext,
-    currentUserId,
-    reviewRound,
-  } = options;
-
-  if (reviewRound) {
-    return {
-      statusLabel: 'Review',
-      statusTone: 'complete' as const,
-    };
-  }
-
-  if (activeRound) {
-    if (activeRound.status === 'attempted') {
-      return activeRound.recipientId === currentUserId
-        ? {
-            statusLabel: 'Guess',
-            statusTone: 'active' as const,
-          }
-        : {
-            statusLabel: 'Finishing',
-            statusTone: 'waiting' as const,
-          };
-    }
-
-    return activeRound.recipientId === currentUserId
-      ? {
-          statusLabel: 'Your turn',
-          statusTone: 'primary' as const,
-        }
-      : {
-          statusLabel: 'Waiting',
-          statusTone: 'waiting' as const,
-        };
-  }
-
-  if (canRecipientComposeNext) {
-    return {
-      statusLabel: 'Record next',
-      statusTone: 'primary' as const,
-    };
-  }
-
-  if (canCurrentUserStart) {
-    return {
-      statusLabel: 'Start',
-      statusTone: 'primary' as const,
-    };
-  }
-
-  return {
-    statusLabel: 'Waiting',
-    statusTone: 'waiting' as const,
-  };
 }
 
 function getThreadDescription(
@@ -166,6 +98,22 @@ function getSelectedFriendIdFromRound(round: Round | null, currentUserId: string
   return round.senderId === currentUserId ? round.recipientId : round.senderId;
 }
 
+function isCurrentUserTurn(thread: ThreadSummary, currentUserId: string | null) {
+  if (!currentUserId) {
+    return false;
+  }
+
+  if (thread.reviewRound) {
+    return true;
+  }
+
+  if (thread.activeRound) {
+    return thread.activeRound.recipientId === currentUserId;
+  }
+
+  return thread.canRecipientComposeNext || thread.canCurrentUserStart;
+}
+
 function mapArchivedRoundToFriend(friend: Friend, summary: ArchiveCompletedRoundSummary): Friend {
   return {
     ...friend,
@@ -175,7 +123,6 @@ function mapArchivedRoundToFriend(friend: Friend, summary: ArchiveCompletedRound
     lastCompletedAt: summary.lastCompletedAt,
   };
 }
-
 
 function LoadingPanel({ message }: { message: string }) {
   const loaderPreviewLabel = message.toLowerCase().includes('revers')
@@ -465,13 +412,6 @@ function App() {
           !canRecipientComposeNext &&
           (!latestRound ? !friend.nextSenderId || friend.nextSenderId === currentUserId : false);
         const displayRound = reviewRound ?? activeRound ?? (canRecipientComposeNext ? latestRound : null);
-        const { statusLabel, statusTone } = getThreadStatus({
-          activeRound,
-          canCurrentUserStart,
-          canRecipientComposeNext,
-          currentUserId,
-          reviewRound,
-        });
 
         return {
           activeRound,
@@ -484,8 +424,6 @@ function App() {
           latestRound,
           reviewRound,
           roundCount: friend.completedRoundCount + pairRounds.length,
-          statusLabel,
-          statusTone,
         };
       })
       .sort((left, right) => {
@@ -539,6 +477,13 @@ function App() {
     setIsMenuOpen(false);
   };
 
+  const handleCreateGame = (friendId: string) => {
+    setSelectedFriendId(friendId);
+    setIsComposingNextRound(true);
+    setView('thread');
+    setIsMenuOpen(false);
+  };
+
   const handleCreateRound = (round: Round) => {
     setRounds((currentRounds) => [round, ...currentRounds]);
     setSelectedFriendId(getSelectedFriendIdFromRound(round, currentUserId));
@@ -556,6 +501,15 @@ function App() {
     setView('home');
     setIsMenuOpen(false);
     setIsComposingNextRound(false);
+  };
+
+  const handleBackFromCreateRound = () => {
+    if (selectedThread?.displayRound) {
+      setIsComposingNextRound(false);
+      return;
+    }
+
+    handleOpenHome();
   };
 
   const handleUpdateRound = (roundId: string, updater: (round: Round) => Round) => {
@@ -602,17 +556,25 @@ function App() {
 
   const homeFriendRows = useMemo(
     () =>
-      threadSummaries.map((thread) => ({
-        id: thread.friend.id,
-        username: thread.friend.username,
-        createdAt: thread.friend.createdAt,
-        averageStars: thread.averageStars,
-        statusLabel: thread.statusLabel,
-        statusTone: thread.statusTone,
-        roundCount: thread.roundCount,
-        lastActiveAt: thread.lastActiveAt,
-        activeRoundId: thread.displayRound?.id ?? null,
-      })),
+      threadSummaries
+        .filter((thread) => thread.roundCount > 0)
+        .map((thread) => ({
+          id: thread.friend.id,
+          username: thread.friend.username,
+          averageStars: thread.averageStars,
+          isYourTurn: isCurrentUserTurn(thread, currentUserId),
+        })),
+    [currentUserId, threadSummaries],
+  );
+
+  const createGameOptions = useMemo(
+    () =>
+      threadSummaries
+        .filter((thread) => thread.roundCount === 0 && thread.canCurrentUserStart)
+        .map((thread) => ({
+          id: thread.friend.id,
+          username: thread.friend.username,
+        })),
     [threadSummaries],
   );
 
@@ -682,8 +644,8 @@ function App() {
         </div>
       ) : (
         <>
-          <section className="surface app-topbar">
-            <div className="button-row hero-actions">
+          {view === 'home' ? (
+            <div className="home-topbar">
               <button
                 aria-label="Open menu"
                 className="drawer-toggle"
@@ -694,23 +656,39 @@ function App() {
                 <span />
                 <span />
               </button>
+              <img alt="BackTalk" className="home-topbar-logo" src={homeLogo} />
             </div>
-
-            <div>
-              <div className="eyebrow">BackTalk</div>
-              <h1>{currentPageTitle}</h1>
-              <p>{currentPageDescription}</p>
-            </div>
-
-            <div className="app-topbar-side">
-              <div className="meta-chip topbar-meta">
-                <strong>{profile?.username ? `@${profile.username}` : 'Loading profile...'}</strong>
-                <span>
-                  {friends.length} friend{friends.length === 1 ? '' : 's'} connected
-                </span>
+          ) : (
+            <section className="surface app-topbar">
+              <div className="button-row hero-actions">
+                <button
+                  aria-label="Open menu"
+                  className="drawer-toggle"
+                  onClick={() => setIsMenuOpen(true)}
+                  type="button"
+                >
+                  <span />
+                  <span />
+                  <span />
+                </button>
               </div>
-            </div>
-          </section>
+
+              <div>
+                <div className="eyebrow">BackTalk</div>
+                <h1>{currentPageTitle}</h1>
+                <p>{currentPageDescription}</p>
+              </div>
+
+              <div className="app-topbar-side">
+                <div className="meta-chip topbar-meta">
+                  <strong>{profile?.username ? `@${profile.username}` : 'Loading profile...'}</strong>
+                  <span>
+                    {friends.length} friend{friends.length === 1 ? '' : 's'} connected
+                  </span>
+                </div>
+              </div>
+            </section>
+          )}
 
           {isMenuOpen ? (
             <>
@@ -755,7 +733,9 @@ function App() {
           <div className="stack">
             {view === 'home' ? (
               <HomePanel
+                createGameOptions={createGameOptions}
                 friends={homeFriendRows}
+                onCreateGame={handleCreateGame}
                 onOpenFriend={handleSelectFriend}
                 onOpenFriends={handleOpenFriends}
               />
@@ -781,7 +761,7 @@ function App() {
                 currentUserId={profile.id}
                 currentUserUsername={profile.username}
                 friend={selectedThread.friend}
-                onBack={() => setIsComposingNextRound(false)}
+                onBack={handleBackFromCreateRound}
                 onCreateRound={handleCreateRound}
               />
             ) : null}

@@ -1122,20 +1122,14 @@ p {
   color: var(--muted);
 }
 
+.audio-card audio {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 14px;
+}
+
 .audio-card .fine-print {
   margin-top: 10px;
-}
-
-.audio-card-player-row {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-  padding: 2px 0 4px;
-}
-
-.audio-card-player-row .fine-print {
-  margin: 0;
-  color: var(--muted);
 }
 
 .pill-row,
@@ -1544,73 +1538,6 @@ p {
 .waveform-loader {
   display: block;
   overflow: visible;
-}
-
-.waveform-play-button {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  cursor: pointer;
-  border-radius: 999px;
-  transition:
-    transform 180ms ease,
-    filter 220ms ease,
-    opacity 160ms ease;
-}
-
-.waveform-play-button:hover:not(:disabled) {
-  transform: translateY(-1px) scale(1.02);
-}
-
-.waveform-play-button:active:not(:disabled) {
-  transform: scale(0.96);
-}
-
-.waveform-play-button:focus-visible {
-  outline: 2px solid rgba(27, 141, 255, 0.6);
-  outline-offset: 4px;
-}
-
-.waveform-play-button:disabled {
-  opacity: 0.48;
-  cursor: not-allowed;
-}
-
-.waveform-play-button-svg {
-  display: block;
-  overflow: visible;
-}
-
-.waveform-play-button-icon {
-  transform-origin: center;
-  transition:
-    opacity 260ms ease,
-    transform 260ms ease;
-}
-
-.waveform-play-button.is-playing {
-  filter:
-    drop-shadow(0 0 5px rgba(42, 214, 217, 0.4))
-    drop-shadow(0 0 11px rgba(241, 44, 180, 0.2));
-}
-
-.waveform-play-button--compact {
-  transform: scale(0.92);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .waveform-play-button,
-  .waveform-play-button-icon {
-    transition-duration: 80ms;
-  }
-
-  .waveform-play-button:hover:not(:disabled),
-  .waveform-play-button:active:not(:disabled) {
-    transform: none;
-  }
 }
 
 @media (max-width: 640px) {

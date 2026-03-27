@@ -1,5 +1,12 @@
 export function normalizeGuess(value: string) {
-  return value.trim().toLocaleLowerCase();
+  return value
+    .trim()
+    .normalize('NFKC')
+    .replace(/[\u2018\u2019\u201B\u2032\u0060]/g, "'")
+    .replace(/[\u201C\u201D\u2033]/g, '"')
+    .replace(/[\p{P}\p{S}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase();
 }
 
 function wassersteinEditDistance(a: string, b: string) {

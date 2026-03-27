@@ -222,7 +222,7 @@ export function WaveformPlayButton({
 
         if (analyser && frequencyData && smoothed && isPlaying && !prefersReducedMotion) {
           analyser.getByteFrequencyData(frequencyData);
-          const amplitude = 13.5 * intensity * progress;
+          const amplitude = 17.5 * intensity * progress;
           const minRadius = strokeWidth * 0.9;
 
           for (let i = 0; i < segmentCount; i += 1) {

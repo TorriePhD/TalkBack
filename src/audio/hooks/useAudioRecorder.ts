@@ -13,7 +13,6 @@ interface UseAudioRecorderResult {
   isRecording: boolean;
   isPreparing: boolean;
   isPrepared: boolean;
-  stream: MediaStream | null;
   audioBlob: Blob | null;
   clearRecording: () => void;
   error: string | null;
@@ -99,7 +98,6 @@ export function useAudioRecorder(
   const startSequenceRef = useRef(0);
   const isMountedRef = useRef(true);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isPrepared, setIsPrepared] = useState(false);
@@ -144,7 +142,6 @@ export function useAudioRecorder(
     recorderRef.current = null;
     stopStream(streamRef.current);
     streamRef.current = null;
-    setStream(null);
     preparePromiseRef.current = null;
 
     if (isMountedRef.current) {
@@ -207,7 +204,6 @@ export function useAudioRecorder(
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
-        setStream(stream);
         schedulePreparedStreamRelease();
 
         if (isMountedRef.current) {
@@ -404,7 +400,6 @@ export function useAudioRecorder(
     isPreparing,
     isPrepared,
     audioBlob,
-    stream,
     clearRecording,
     error,
     mimeType,

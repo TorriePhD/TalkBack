@@ -41,6 +41,26 @@ function PlayIcon() {
   );
 }
 
+function InfoIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="game-action-icon"
+      fill="none"
+      viewBox="0 0 12 12"
+    >
+      <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.25" />
+      <path
+        d="M6 5.4v2.3"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.25"
+      />
+      <circle cx="6" cy="3.7" fill="currentColor" r="0.7" />
+    </svg>
+  );
+}
+
 export function HomePanel({
   friends,
   createGameOptions,
@@ -124,7 +144,7 @@ export function HomePanel({
                   }}
                   type="button"
                 >
-                  <PlayIcon />
+                  {friend.isYourTurn ? <PlayIcon /> : <InfoIcon />}
                   <span>{friend.isYourTurn ? 'Take Turn' : 'Their Turn'}</span>
                 </button>
               </div>

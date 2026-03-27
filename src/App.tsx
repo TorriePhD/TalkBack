@@ -599,44 +599,6 @@ function App() {
 
   return (
     <main className="app-shell">
-      {!currentUserId && !isAuthLoading ? (
-        <section className="hero welcome-shell">
-          <div className="hero-card welcome-card">
-            <div className="hero-heading">
-              <div>
-                <div className="eyebrow">Private Voice Rounds</div>
-                <h1>BackTalk</h1>
-                <p>
-                  Keep one running voice chain with each friend. Each turn can include a review,
-                  an imitation, a guess, and the next prompt.
-                </p>
-              </div>
-            </div>
-
-            <div className="badge-row">
-              <span className="badge created">One chain per friend</span>
-              <span className="badge waiting">Tap to record</span>
-              <span className="badge complete">0 to 3 stars</span>
-            </div>
-          </div>
-
-          <div className="hero-meta">
-            <div className="meta-chip">
-              <strong>Private by default</strong>
-              <span>Only confirmed friends can see rounds and audio.</span>
-            </div>
-            <div className="meta-chip">
-              <strong>Always moving</strong>
-              <span>Each finished imitation can immediately lead into the next prompt.</span>
-            </div>
-            <div className="meta-chip">
-              <strong>Light history</strong>
-              <span>Completed round audio is archived after review, while average stars stay on the friend list.</span>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
       {showSecureContextWarning ? (
         <div className="error-banner">
           This page is not running in a secure context. Microphone recording will only work on
@@ -651,9 +613,7 @@ function App() {
       {isAuthLoading ? (
         <LoadingPanel message="Checking your Supabase session..." />
       ) : !currentUserId ? (
-        <div className="stack">
-          <AuthPanel />
-        </div>
+        <AuthPanel />
       ) : (
         <>
           {view === 'home' ? (

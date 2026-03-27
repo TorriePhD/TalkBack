@@ -83,27 +83,16 @@ export function AuthPanel() {
 
   return (
     <section className="surface auth-shell">
-      <div className="eyebrow">BackTalk</div>
       <div className="section-header">
         <div>
-          <h2>{mode === 'login' ? 'Sign in and keep the thread moving' : 'Create your account'}</h2>
-          <p>
-            {mode === 'login'
-              ? 'Use your username or email to sign in.'
-              : 'Pick a username, add your email, and type your password twice to confirm it.'}
-          </p>
+          <div className="eyebrow">BackTalk</div>
+          <h2>{mode === 'login' ? 'Sign in' : 'Create account'}</h2>
         </div>
       </div>
 
       {supabaseConfigError ? <div className="error-banner">{supabaseConfigError}</div> : null}
 
       <div className="stack">
-        <div className="pill-row">
-          <span className="badge created">Private rounds</span>
-          <span className="badge waiting">Username login</span>
-          <span className="badge complete">Quick play</span>
-        </div>
-
         {mode === 'login' ? (
           <>
             <div className="field">

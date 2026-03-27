@@ -708,34 +708,38 @@ p {
 .star-rating {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-}
-
-.star-rating-large {
   gap: 10px;
 }
 
+.star-rating-large {
+  gap: 12px;
+}
+
 .star-rating-icon {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
+  filter: drop-shadow(0 0 5px rgba(255, 72, 240, 0.5))
+    drop-shadow(0 0 12px rgba(74, 236, 255, 0.35));
 }
 
 .star-rating-large .star-rating-icon {
-  width: 42px;
-  height: 42px;
+  width: 52px;
+  height: 52px;
 }
 
 .star-rating-empty {
-  fill: none;
-  stroke: #b4b8c1;
-  stroke-width: 1.8;
+  fill: #180b2f;
+  stroke: #ff5ff5;
+  stroke-width: 2;
+  opacity: 0.95;
 }
 
 .star-rating-fill {
-  fill: #ffd33d;
-  stroke: #d7a506;
-  stroke-width: 1.2;
+  fill: #f9ff55;
+  stroke: #19f9ff;
+  stroke-width: 1.8;
+  paint-order: stroke;
 }
 
 .thread-average-score {

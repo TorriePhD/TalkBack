@@ -700,8 +700,54 @@ p {
 }
 
 .game-score-value {
-  font-size: 1rem;
-  font-weight: 800;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.star-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.star-rating-large {
+  gap: 10px;
+}
+
+.star-rating-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+
+.star-rating-large .star-rating-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.star-rating-empty {
+  fill: none;
+  stroke: #b4b8c1;
+  stroke-width: 1.8;
+}
+
+.star-rating-fill {
+  fill: #ffd33d;
+  stroke: #d7a506;
+  stroke-width: 1.2;
+}
+
+.thread-average-score {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.thread-average-score span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .game-actions {

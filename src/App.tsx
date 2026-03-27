@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import homeLogo from './assets/backtalk-logo.png';
+import { StarRating } from './components/StarRating';
 import { WaveformLoader } from './components/WaveformLoader';
 import { AuthPanel } from './features/auth/components/AuthPanel';
 import { CreateRoundPanel } from './features/rounds/components/CreateRoundPanel';
@@ -210,12 +211,22 @@ function WaitingThreadPanel({
 
       <div className="round-screen-body">
         <div className="result-box">
-          <p>
-            <strong>Average stars:</strong>{' '}
-            {friend.averageStars === null || friend.averageStars === undefined
-              ? 'No completed rounds yet'
-              : `${friend.averageStars.toFixed(1)} / 3`}
-          </p>
+          <div className="thread-average-score">
+            <strong>Average score:</strong>
+            <StarRating
+              label={
+                friend.averageStars === null || friend.averageStars === undefined
+                  ? 'No completed rounds yet'
+                  : `Average score ${friend.averageStars.toFixed(1)} out of 3`
+              }
+              value={friend.averageStars ?? 0}
+            />
+            <span>
+              {friend.averageStars === null || friend.averageStars === undefined
+                ? 'No completed rounds yet'
+                : `${friend.averageStars.toFixed(1)} / 3`}
+            </span>
+          </div>
           <p>
             <strong>Completed sessions:</strong> {friend.completedRoundCount}
           </p>

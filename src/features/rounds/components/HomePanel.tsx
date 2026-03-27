@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { StarRating } from '../../../components/StarRating';
 
 interface HomeFriendSummary {
   id: string;
@@ -130,9 +131,11 @@ export function HomePanel({
                   aria-label={`Average score ${formatAverageScore(friend.averageStars)}`}
                 >
                   <span className="game-score-label">Average Score</span>
-                  <span className="game-score-value">
-                    {formatAverageScore(friend.averageStars)}
-                  </span>
+                  <StarRating
+                    label={`Average score ${formatAverageScore(friend.averageStars)}`}
+                    value={friend.averageStars ?? 0}
+                  />
+                  <span className="game-score-value">{formatAverageScore(friend.averageStars)}</span>
                 </div>
               </div>
 

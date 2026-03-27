@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
+import { StarRating } from '../../../components/StarRating';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { StatusBadge } from '../../../components/StatusBadge';
 import { saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
@@ -404,9 +405,15 @@ export function PlayRoundPanel({
           {recipientStage === 'reveal' && scorePresentation ? (
             <div className="round-screen-step">
               <div className="result-box">
-                <p className={`score-mark tone-${scorePresentation.tone}`}>
-                  {scorePresentation.starLabel}
-                </p>
+                {scorePresentation.starCount === null ? (
+                  <p className={`score-mark tone-${scorePresentation.tone}`}>{scorePresentation.starLabel}</p>
+                ) : (
+                  <StarRating
+                    label={scorePresentation.starLabel}
+                    large
+                    value={scorePresentation.starCount}
+                  />
+                )}
                 <p>{scorePresentation.celebration}</p>
                 <p>{scorePresentation.description}</p>
                 <p>
@@ -462,9 +469,15 @@ export function PlayRoundPanel({
           {round.status === 'complete' && scorePresentation ? (
             <div className="round-screen-step">
               <div className="result-box">
-                <p className={`score-mark tone-${scorePresentation.tone}`}>
-                  {scorePresentation.starLabel}
-                </p>
+                {scorePresentation.starCount === null ? (
+                  <p className={`score-mark tone-${scorePresentation.tone}`}>{scorePresentation.starLabel}</p>
+                ) : (
+                  <StarRating
+                    label={scorePresentation.starLabel}
+                    large
+                    value={scorePresentation.starCount}
+                  />
+                )}
                 <p>{scorePresentation.celebration}</p>
                 <p>{scorePresentation.description}</p>
                 <p>

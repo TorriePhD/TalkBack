@@ -350,6 +350,7 @@ export function PlayRoundPanel({
                   disabled={round.status === 'complete' || isSavingAttempt}
                   isPreparing={recorder.isPreparing}
                   isRecording={recorder.isRecording}
+                  liveStream={recorder.liveStream}
                   onStart={recorder.startRecording}
                   onStop={recorder.stopRecording}
                 />

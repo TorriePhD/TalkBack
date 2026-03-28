@@ -2,6 +2,7 @@ import type { Round } from '../features/rounds/types';
 import type { ArchiveCompletedRoundSummary } from '../features/rounds/types';
 import type { RoundStarCount } from '../features/rounds/types';
 import { scoreGuess } from '../features/rounds/utils';
+import { sendClipSentPushNotification } from './push';
 import { supabase, supabaseConfigError } from './supabase';
 import { createSignedAudioUrl, uploadAudio } from './storage/uploadAudio';
 
@@ -202,11 +203,19 @@ export async function createRoundRecord(
     throw new Error(`Unable to create round: ${error?.message || 'Unknown error.'}`);
   }
 
-  return {
+  const nextRound = {
     ...(await mapRoundRow(data as unknown as RoundRow)),
     originalAudioBlob: input.originalAudioBlob,
     reversedAudioBlob: input.reversedAudioBlob,
   };
+
+  try {
+    await sendClipSentPushNotification(input.recipientId);
+  } catch (pushError) {
+    console.warn('Unable to send push notification for the new clip:', pushError);
+  }
+
+  return nextRound;
 }
 
 export async function saveRoundAttempt(

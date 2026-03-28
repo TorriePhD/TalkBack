@@ -4,6 +4,7 @@ dist
 .env
 .env.local
 .env.*.local
+supabase/functions/.env
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

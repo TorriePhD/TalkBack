@@ -17,6 +17,7 @@ import {
   subscribeToAuthChanges,
 } from './lib/auth';
 import { listFriendRequests, listFriends } from './lib/friends';
+import { syncPushNotifications, type PushSyncStatus } from './lib/push';
 import { archiveCompletedRound, listRounds } from './lib/rounds';
 import { supabaseConfigError } from './lib/supabase';
 import { InstallAppPrompt } from './pwa/InstallAppPrompt';
@@ -214,6 +215,9 @@ function App() {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pushError, setPushError] = useState<string | null>(null);
+  const [pushStatus, setPushStatus] = useState<PushSyncStatus>('disabled');
+  const [isEnablingPush, setIsEnablingPush] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const initialLoadRequestIdRef = useRef(0);
@@ -264,6 +268,41 @@ function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setPushError(null);
+      setPushStatus('disabled');
+      setIsEnablingPush(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncPushState = async () => {
+      try {
+        const result = await syncPushNotifications(currentUserId);
+
+        if (!cancelled) {
+          setPushStatus(result.status);
+          setPushError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPushStatus('disabled');
+          setPushError(
+            error instanceof Error ? error.message : 'Unable to set up push notifications.',
+          );
+        }
+      }
+    };
+
+    void syncPushState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId]);
 
   const refreshAppData = async (options?: {
     initialLoadRequestId?: number;
@@ -492,6 +531,29 @@ function App() {
     }
   };
 
+  const handleEnablePushNotifications = async () => {
+    if (!currentUserId) {
+      return;
+    }
+
+    setIsEnablingPush(true);
+    setPushError(null);
+
+    try {
+      const result = await syncPushNotifications(currentUserId, {
+        requestPermission: true,
+      });
+      setPushStatus(result.status);
+    } catch (error) {
+      setPushStatus('disabled');
+      setPushError(
+        error instanceof Error ? error.message : 'Unable to enable push notifications.',
+      );
+    } finally {
+      setIsEnablingPush(false);
+    }
+  };
+
   const homeFriendRows = useMemo(
     () =>
       threadSummaries
@@ -535,6 +597,27 @@ function App() {
 
       {signOutError ? <div className="error-banner">{signOutError}</div> : null}
       {loadError ? <div className="error-banner">{loadError}</div> : null}
+      {pushError ? <div className="error-banner">{pushError}</div> : null}
+      {currentUserId && pushStatus === 'needs-permission' ? (
+        <div className="info-banner notification-banner">
+          <div>
+            <strong>Enable notifications</strong>
+            <p>Get a heads-up when your friend sends you a clip.</p>
+          </div>
+          <div className="button-row notification-banner-actions">
+            <button
+              className="button secondary"
+              disabled={isEnablingPush}
+              onClick={() => {
+                void handleEnablePushNotifications();
+              }}
+              type="button"
+            >
+              {isEnablingPush ? 'Enabling notifications...' : 'Enable notifications'}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <InstallAppPrompt />
 
       {isAuthLoading ? (

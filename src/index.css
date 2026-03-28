@@ -214,6 +214,25 @@ p {
   align-items: center;
 }
 
+.notification-banner {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.notification-banner p,
+.notification-banner strong {
+  display: block;
+}
+
+.notification-banner p {
+  margin-bottom: 0;
+}
+
+.notification-banner-actions {
+  align-items: center;
+}
+
 .fullscreen-loader-screen {
   min-height: 100dvh;
   display: grid;

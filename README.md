@@ -78,6 +78,8 @@ npm run build
 - The app ships with a web manifest, service worker registration, and install prompt support for Android browsers that fire `beforeinstallprompt`.
 - iPhone and iPad install is supported through Safari `Share > Add to Home Screen`.
 - `npm run dev` already binds to `0.0.0.0:5173`, so the app is reachable from other devices on the same LAN.
+- Push subscription setup runs once per signed-in user session, stores the subscription in Supabase, and sends a single clip notification through an Edge Function after a round is created.
+- Set `VITE_PUSH_VAPID_PUBLIC_KEY` in `.env.local` to the public VAPID key generated for the push backend.
 - For GitHub Pages, set `BASE_PATH` or `VITE_BASE_PATH` to your repository path such as `/TalkBack/` when you need a manual override. The Vite config also auto-detects the repository name during GitHub Actions builds.
 - The manifest uses relative URLs so the install entry point works both at `/` and at a GitHub Pages repository subpath.
 
@@ -101,3 +103,18 @@ To test microphone recording or home-screen install from another device on the s
    ```
 
 4. Open `https://YOUR_HOSTNAME_OR_IP:5173` on the other device, and make sure that device trusts the certificate chain.
+
+## Push Notifications
+
+- Create the subscription table with `supabase db push` after applying [`supabase/migrations/20260328000000_push_subscriptions.sql`](./supabase/migrations/20260328000000_push_subscriptions.sql).
+- Generate VAPID keys locally with `npx web-push generate-vapid-keys`.
+- Copy [`supabase/functions/.env.example`](./supabase/functions/.env.example) to `supabase/functions/.env`, fill in the values, then load them into Supabase:
+
+  ```bash
+  supabase secrets set \
+    --env-file supabase/functions/.env
+  ```
+
+- The function expects `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT`.
+- Deploy the function with `supabase functions deploy send-push-notification`.
+- The push payload is fixed to `Your friend sent you a clip 🎤`.

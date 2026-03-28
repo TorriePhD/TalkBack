@@ -750,6 +750,24 @@ p {
   border-color: rgba(255, 99, 84, 0.24);
 }
 
+.badge.easy {
+  background: rgba(31, 127, 89, 0.14);
+  color: #1c6a4b;
+  border-color: rgba(31, 127, 89, 0.2);
+}
+
+.badge.medium {
+  background: rgba(255, 182, 77, 0.2);
+  color: #9b6110;
+  border-color: rgba(255, 182, 77, 0.22);
+}
+
+.badge.hard {
+  background: rgba(77, 121, 255, 0.14);
+  color: #244da6;
+  border-color: rgba(77, 121, 255, 0.2);
+}
+
 .status-badge {
   white-space: nowrap;
 }

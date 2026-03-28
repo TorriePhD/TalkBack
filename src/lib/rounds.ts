@@ -2,6 +2,7 @@ import type { Round } from '../features/rounds/types';
 import type { ArchiveCompletedRoundSummary } from '../features/rounds/types';
 import type { RoundStarCount } from '../features/rounds/types';
 import { scoreGuess } from '../features/rounds/utils';
+import { normalizePackText } from '../utils/difficulty';
 import { sendClipSentPushNotification } from './push';
 import { supabase, supabaseConfigError } from './supabase';
 import { createSignedAudioUrl, uploadAudio } from './storage/uploadAudio';
@@ -191,7 +192,7 @@ export async function createRoundRecord(
     .insert({
       id: roundId,
       recipient_id: input.recipientId,
-      correct_phrase: input.correctPhrase.trim(),
+      correct_phrase: normalizePackText(input.correctPhrase),
       original_audio_path: originalAudio.path,
       reversed_audio_path: reversedAudio.path,
       status: 'waiting_for_attempt',

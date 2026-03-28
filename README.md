@@ -33,13 +33,34 @@ The app now supports:
    supabase db push
    ```
 
-   The new auth/social migration is [`supabase/migrations/20260324202000_auth_friend_rounds.sql`](./supabase/migrations/20260324202000_auth_friend_rounds.sql).
+   The core app schema starts with [`supabase/migrations/20260324202000_auth_friend_rounds.sql`](./supabase/migrations/20260324202000_auth_friend_rounds.sql) and the word-pack schema is added by [`supabase/migrations/20260328100000_word_packs.sql`](./supabase/migrations/20260328100000_word_packs.sql).
 
 5. Start the app:
 
    ```bash
    npm run dev
    ```
+
+## Offline Pack Generation
+
+Use the offline generator to create themed packs from a local word list and push them into Supabase with a service-role key.
+
+1. Add these values to your shell or `.env.local`:
+
+   ```bash
+   SUPABASE_URL=your-project-url
+   SUPABASE_SERVICE_KEY=your-service-role-key
+   ```
+
+2. Provide words as JSON or newline-separated input, then run:
+
+   ```bash
+   npm run generate:pack -- --name "Animals" --words-file ./packs/animals.txt
+   ```
+
+   The script also accepts `--words-json '["one","two"]'` or piped stdin.
+
+3. The generator normalizes phrases to lowercase, trims whitespace, computes difficulty, and inserts rows into `word_packs` and `words`.
 
 ## Auth Notes
 
@@ -53,6 +74,8 @@ The app now supports:
 - `friend_requests`: pending or resolved friendship invitations
 - `friendships`: accepted friend pairs
 - `rounds`: sender/recipient-scoped rounds
+- `word_packs`: themed prompt packs
+- `words`: normalized phrases with computed difficulty metadata
 - private `audio` bucket access policies
 - RPCs:
   - `request_friendship(recipient_email_input text)`
@@ -64,6 +87,7 @@ The app now supports:
 - Only confirmed friends can receive new rounds.
 - Only the recipient can upload an attempt and submit a guess.
 - Audio files are stored in private storage and loaded with signed URLs.
+- Round creation now presents three generated phrase choices from the selected pack: easy, medium, and hard.
 
 ## Local Validation
 

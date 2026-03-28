@@ -7,6 +7,15 @@ import { WaveformLoader } from '../../../components/WaveformLoader';
 import { createRoundRecord } from '../../../lib/rounds';
 import type { Friend } from '../../social/types';
 import type { Round } from '../types';
+import {
+  getDefaultPackId,
+  getThreeOptions,
+  getWordPackOptions,
+  loadRoundWordPacks,
+  rememberPresentedPhrase,
+  type WordOption,
+} from '../wordPacks';
+import type { WordPack, WordPackWithWords } from '../../../lib/wordPacks';
 
 interface CreateRoundPanelProps {
   currentUserId: string;
@@ -27,13 +36,57 @@ export function CreateRoundPanel({
 }: CreateRoundPanelProps) {
   const recorder = useAudioRecorder({ preparedStreamIdleMs: 0 });
   const [stage, setStage] = useState<CreateStage>('phrase');
-  const [correctPhrase, setCorrectPhrase] = useState('');
+  const [packs, setPacks] = useState<WordPack[]>([]);
+  const [selectedPackId, setSelectedPackId] = useState<string>('');
+  const [selectedPack, setSelectedPack] = useState<WordPackWithWords | null>(null);
+  const [selectedOption, setSelectedOption] = useState<WordOption | null>(null);
+  const [availableOptions, setAvailableOptions] = useState<WordOption[]>([]);
+  const [packsError, setPacksError] = useState<string | null>(null);
+  const [isLoadingPacks, setIsLoadingPacks] = useState(true);
   const [reversedAudioBlob, setReversedAudioBlob] = useState<Blob | null>(null);
   const [reverseError, setReverseError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isReversing, setIsReversing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const lastAutoReversedBlobRef = useRef<Blob | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPackState = async () => {
+      setIsLoadingPacks(true);
+      const result = await loadRoundWordPacks(selectedPackId || null);
+
+      if (cancelled) {
+        return;
+      }
+
+      setPacks(result.packs);
+      setSelectedPack(result.selectedPack);
+      setSelectedPackId(result.selectedPackId);
+      setPacksError(result.error);
+      setIsLoadingPacks(false);
+    };
+
+    void loadPackState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPackId]);
+
+  useEffect(() => {
+    if (!selectedPack) {
+      setAvailableOptions([]);
+      setSelectedOption(null);
+      return;
+    }
+
+    const nextOptions = getThreeOptions(selectedPack.words);
+
+    setAvailableOptions(nextOptions);
+    setSelectedOption(null);
+  }, [selectedPack]);
 
   useEffect(() => {
     setReversedAudioBlob(null);
@@ -87,22 +140,22 @@ export function CreateRoundPanel({
     };
   }, [recorder.audioBlob, recorder.isRecording]);
 
-  const canContinueToRecord = Boolean(correctPhrase.trim());
+  const canContinueToRecord = Boolean(selectedOption);
   const canCreateRound = useMemo(
     () =>
-      Boolean(correctPhrase.trim() && recorder.audioBlob && reversedAudioBlob) &&
+      Boolean(selectedOption && recorder.audioBlob && reversedAudioBlob) &&
       !isReversing &&
       !isSaving &&
       !recorder.isRecording &&
       !recorder.isPreparing,
     [
-      correctPhrase,
       isReversing,
       isSaving,
       recorder.audioBlob,
       recorder.isPreparing,
       recorder.isRecording,
       reversedAudioBlob,
+      selectedOption,
     ],
   );
 
@@ -115,12 +168,18 @@ export function CreateRoundPanel({
   };
 
   const handleEnterRecordStage = async () => {
+    if (!selectedOption) {
+      return;
+    }
+
+    rememberPresentedPhrase(selectedOption.text);
+
     await recorder.prepareRecording();
     setStage('record');
   };
 
   const handleCreateRound = async () => {
-    if (!recorder.audioBlob || !reversedAudioBlob) {
+    if (!recorder.audioBlob || !reversedAudioBlob || !selectedOption) {
       return;
     }
 
@@ -131,7 +190,7 @@ export function CreateRoundPanel({
       const nextRound = await createRoundRecord({
         currentUserId,
         recipientId: friend.id,
-        correctPhrase: correctPhrase.trim(),
+        correctPhrase: selectedOption.text,
         originalAudioBlob: recorder.audioBlob,
         reversedAudioBlob,
       });
@@ -153,10 +212,10 @@ export function CreateRoundPanel({
 
         <div className="round-screen-copy">
           <div className="eyebrow">Your Send Turn</div>
-          <h2>{stage === 'phrase' ? 'Write the phrase' : 'Record the prompt'}</h2>
+          <h2>{stage === 'phrase' ? 'Pick a phrase' : 'Record the prompt'}</h2>
           <p>
             {stage === 'phrase'
-              ? `This round goes to ${friend.username}. Once they finish, the next turn flips back.`
+              ? `Choose one of the generated options for ${friend.username}. The pack selector stays ready for future themed packs.`
               : 'Start recording when ready, stop to save the take, then send it when you are happy with your normal playback.'}
           </p>
         </div>
@@ -171,22 +230,83 @@ export function CreateRoundPanel({
           <div className="round-screen-step">
             <div className="section-header compact-header">
               <div>
-                <h3>Write what they will imitate</h3>
-                <p>Keep it short so the whole screen stays simple on mobile.</p>
+                <h3>Choose a generated prompt</h3>
+                <p>One easy, one medium, one hard. The pack can be switched before you record.</p>
               </div>
             </div>
 
             <div className="field">
-              <label htmlFor="correctPhrase">Phrase</label>
-              <textarea
-                id="correctPhrase"
+              <label htmlFor="packSelect">Word pack</label>
+              <select
+                id="packSelect"
                 onChange={(event) => {
-                  setCorrectPhrase(event.target.value);
+                  setSelectedPackId(event.target.value);
                 }}
-                placeholder="Type the phrase you want them to imitate."
-                value={correctPhrase}
-              />
+                value={selectedPackId || getDefaultPackId(packs)}
+              >
+                {getWordPackOptions(packs).map((pack) => (
+                  <option key={pack.id} value={pack.id}>
+                    {pack.name} {pack.isFree ? '(Free)' : '(Paid)'}
+                  </option>
+                ))}
+              </select>
             </div>
+
+            {selectedPack ? (
+              <div className="result-box">
+                <p>
+                  <strong>Pack:</strong> {selectedPack.name}
+                </p>
+                <p>
+                  <strong>Words:</strong> {selectedPack.words.length}
+                </p>
+                {selectedPack.description ? <p>{selectedPack.description}</p> : null}
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                display: 'grid',
+                gap: '0.75rem',
+              }}
+            >
+              {availableOptions.map((option) => {
+                const isSelected = selectedOption?.text === option.text;
+
+                return (
+                  <button
+                    className={`button ${isSelected ? 'primary' : 'secondary'}`}
+                    key={`${option.displayDifficulty}-${option.id}`}
+                    onClick={() => {
+                      setSelectedOption(option);
+                    }}
+                    type="button"
+                  >
+                    <span className="pill-row" style={{ justifyContent: 'space-between', width: '100%' }}>
+                      <span className={`badge ${option.displayDifficulty}`}>{option.displayDifficulty}</span>
+                      <span>{option.syllables} syllables</span>
+                    </span>
+                    <span style={{ display: 'block', marginTop: '0.5rem', textAlign: 'left' }}>
+                      {option.text}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {isLoadingPacks ? (
+              <div className="round-loader-callout" aria-live="polite" role="status">
+                <WaveformLoader
+                  className="round-loader-callout-spinner"
+                  size={92}
+                  strokeWidth={3.6}
+                />
+                <div>
+                  <strong>Loading packs...</strong>
+                  <p>Fetching themed word packs and warming the local cache.</p>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -200,7 +320,7 @@ export function CreateRoundPanel({
                 <strong>To:</strong> {friend.username}
               </p>
               <p>
-                <strong>Phrase:</strong> {correctPhrase.trim() || 'Choose a phrase first'}
+                <strong>Phrase:</strong> {selectedOption?.text || 'Choose a phrase first'}
               </p>
             </div>
 
@@ -266,7 +386,13 @@ export function CreateRoundPanel({
           </div>
         ) : (
           <div className="button-row">
-            <button className="button ghost" onClick={() => setStage('phrase')} type="button">
+            <button
+              className="button ghost"
+              onClick={() => {
+                setStage('phrase');
+              }}
+              type="button"
+            >
               Edit phrase
             </button>
             <button
@@ -284,6 +410,7 @@ export function CreateRoundPanel({
       </div>
 
       <div className="stack">
+        {packsError ? <div className="error-banner">{packsError}</div> : null}
         {recorder.error ? <div className="error-banner">{recorder.error}</div> : null}
         {reverseError ? <div className="error-banner">{reverseError}</div> : null}
         {saveError ? <div className="error-banner">{saveError}</div> : null}

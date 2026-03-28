@@ -256,12 +256,13 @@ export function WaveformLoader({
           y1={size * 0.12}
           y2={size * 0.88}
         >
-          <stop offset="0%" stopColor="#2ad6d9" />
-          <stop offset="18%" stopColor="#1b8dff" />
-          <stop offset="36%" stopColor="#6b5cff" />
-          <stop offset="54%" stopColor="#f12cb4" />
-          <stop offset="74%" stopColor="#ff7b4f" />
-          <stop offset="100%" stopColor="#b6de3f" />
+          <stop offset="0%" stopColor="#ff4b63" />
+          <stop offset="20%" stopColor="#f12cb4" />
+          <stop offset="42%" stopColor="#9a78ff" />
+          <stop offset="47%" stopColor="#4aa8ff" />
+          <stop offset="68%" stopColor="#ff8a3d" />
+          <stop offset="84%" stopColor="#ffd547" />
+          <stop offset="100%" stopColor="#6ecf5b" />
         </linearGradient>
       </defs>
 

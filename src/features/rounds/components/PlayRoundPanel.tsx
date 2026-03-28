@@ -281,25 +281,25 @@ export function PlayRoundPanel({
     <div className="audio-grid">
       <AudioPlayerCard
         title="Your original prompt"
-        description="Forward clip."
+        description="The forward recording that started this round."
         blob={round.originalAudioBlob}
         remoteUrl={round.originalAudioUrl}
       />
       <AudioPlayerCard
         title="Your reversed prompt"
-        description="Backward clip your friend heard."
+        description="The backward clip your friend heard before imitating it."
         blob={round.reversedAudioBlob}
         remoteUrl={round.reversedAudioUrl}
       />
       <AudioPlayerCard
         title="Their imitation"
-        description="Their recorded take."
+        description="Your friend's attempt at copying the reversed prompt."
         blob={round.attemptAudioBlob}
         remoteUrl={round.attemptAudioUrl}
       />
       <AudioPlayerCard
         title="Their imitation reversed"
-        description="Their flipped take."
+        description="The flipped version they used when making their guess."
         blob={round.attemptReversedBlob}
         remoteUrl={round.attemptReversedUrl}
       />
@@ -441,12 +441,12 @@ export function PlayRoundPanel({
                 <p>
                   <strong>Phrase:</strong> {round.correctPhrase}
                 </p>
-                <p>Waiting for {round.recipientUsername} to submit an attempt.</p>
+                <p>{roundSummary?.callToAction}</p>
               </div>
 
               <AudioPlayerCard
                 title="Your prompt"
-                description="Forward clip."
+                description="This is the forward clip your friend is about to imitate."
                 blob={round.originalAudioBlob}
                 remoteUrl={round.originalAudioUrl}
               />
@@ -459,7 +459,7 @@ export function PlayRoundPanel({
                 <p>
                   <strong>Phrase:</strong> {round.correctPhrase}
                 </p>
-                <p>Attempt received. Waiting for their guess.</p>
+                <p>{roundSummary?.callToAction}</p>
               </div>
 
               {reviewAudioGrid}
@@ -478,6 +478,8 @@ export function PlayRoundPanel({
                     value={scorePresentation.starCount}
                   />
                 )}
+                <p>{scorePresentation.celebration}</p>
+                <p>{scorePresentation.description}</p>
                 <p>
                   <strong>Guess:</strong> {round.guess || 'No guess submitted'}
                 </p>

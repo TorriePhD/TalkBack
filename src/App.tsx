@@ -38,6 +38,7 @@ interface ThreadSummary {
 }
 
 const DEFAULT_SIGNED_IN_VIEW: View = 'home';
+const PUSH_DEBUG_PREFIX = '[push]';
 
 function sortNewestFirst(left: Round, right: Round) {
   return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
@@ -274,6 +275,19 @@ function App() {
       setPushError(null);
       setPushStatus('disabled');
       setIsEnablingPush(false);
+
+      if (
+        import.meta.env.DEV &&
+        typeof window !== 'undefined' &&
+        'Notification' in window &&
+        Notification.permission === 'default'
+      ) {
+        console.info(
+          PUSH_DEBUG_PREFIX,
+          'Notification permission is still default, but push setup is skipped until a user is signed in.',
+        );
+      }
+
       return;
     }
 
@@ -284,11 +298,24 @@ function App() {
         const result = await syncPushNotifications(currentUserId);
 
         if (!cancelled) {
+          if (import.meta.env.DEV) {
+            console.info(PUSH_DEBUG_PREFIX, 'Push sync completed for signed-in user.', {
+              pushStatus: result.status,
+              userId: currentUserId,
+            });
+          }
           setPushStatus(result.status);
           setPushError(null);
         }
       } catch (error) {
         if (!cancelled) {
+          if (import.meta.env.DEV) {
+            console.error(
+              PUSH_DEBUG_PREFIX,
+              'Push sync failed for signed-in user.',
+              error,
+            );
+          }
           setPushStatus('disabled');
           setPushError(
             error instanceof Error ? error.message : 'Unable to set up push notifications.',
@@ -543,8 +570,21 @@ function App() {
       const result = await syncPushNotifications(currentUserId, {
         requestPermission: true,
       });
+      if (import.meta.env.DEV) {
+        console.info(PUSH_DEBUG_PREFIX, 'User-triggered push enable flow completed.', {
+          pushStatus: result.status,
+          userId: currentUserId,
+        });
+      }
       setPushStatus(result.status);
     } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error(
+          PUSH_DEBUG_PREFIX,
+          'User-triggered push enable flow failed.',
+          error,
+        );
+      }
       setPushStatus('disabled');
       setPushError(
         error instanceof Error ? error.message : 'Unable to enable push notifications.',
@@ -598,6 +638,19 @@ function App() {
       {signOutError ? <div className="error-banner">{signOutError}</div> : null}
       {loadError ? <div className="error-banner">{loadError}</div> : null}
       {pushError ? <div className="error-banner">{pushError}</div> : null}
+      {!currentUserId &&
+      typeof window !== 'undefined' &&
+      window.isSecureContext &&
+      'Notification' in window &&
+      Notification.permission === 'default' &&
+      import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY?.trim() ? (
+        <div className="info-banner notification-banner">
+          <div>
+            <strong>Sign in to enable notifications</strong>
+            <p>The browser prompt only appears after sign-in when you tap Enable notifications.</p>
+          </div>
+        </div>
+      ) : null}
       {currentUserId && pushStatus === 'needs-permission' ? (
         <div className="info-banner notification-banner">
           <div>

@@ -1,6 +1,7 @@
 import { supabase, supabaseConfigError } from './supabase';
 
 const PUSH_SESSION_KEY_PREFIX = 'push-subscription-ready:';
+const PUSH_DEBUG_PREFIX = '[push]';
 
 export type PushSyncStatus =
   | 'disabled'
@@ -12,6 +13,19 @@ export type PushSyncStatus =
 export interface PushSyncResult {
   status: PushSyncStatus;
   permission: NotificationPermission | 'unsupported';
+}
+
+function debugPush(message: string, details?: unknown) {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+
+  if (details === undefined) {
+    console.info(PUSH_DEBUG_PREFIX, message);
+    return;
+  }
+
+  console.info(PUSH_DEBUG_PREFIX, message, details);
 }
 
 function requireSupabase() {
@@ -34,6 +48,27 @@ function isBrowserPushSupported() {
     'PushManager' in window &&
     'serviceWorker' in navigator
   );
+}
+
+function getSupportSnapshot() {
+  return {
+    hasNotificationApi:
+      typeof window !== 'undefined' && 'Notification' in window,
+    hasPushManager:
+      typeof window !== 'undefined' && 'PushManager' in window,
+    hasServiceWorker:
+      typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
+    isSecureContext:
+      typeof window !== 'undefined' ? window.isSecureContext : false,
+    permission:
+      typeof window !== 'undefined' && 'Notification' in window
+        ? Notification.permission
+        : 'unsupported',
+    vapidConfigured: Boolean(getVapidPublicKey()),
+    serviceWorkerUrl:
+      typeof window !== 'undefined' ? getServiceWorkerUrl() : 'sw.js',
+    serviceWorkerScope: getServiceWorkerScope(),
+  };
 }
 
 function getServiceWorkerScope() {
@@ -91,6 +126,10 @@ function hasSessionReadyFlag(userId: string) {
 
 async function savePushSubscription(userId: string, subscription: PushSubscription) {
   const client = requireSupabase();
+  debugPush('Saving push subscription to Supabase.', {
+    endpoint: subscription.endpoint,
+    userId,
+  });
   const { error } = await client.from('push_subscriptions').upsert(
     {
       user_id: userId,
@@ -108,8 +147,11 @@ async function savePushSubscription(userId: string, subscription: PushSubscripti
 
 export async function registerAppServiceWorker() {
   if (!isBrowserPushSupported()) {
+    debugPush('Skipping service worker registration because push is unsupported.', getSupportSnapshot());
     return null;
   }
+
+  debugPush('Registering push service worker.', getSupportSnapshot());
 
   return navigator.serviceWorker.register(getServiceWorkerUrl(), {
     scope: getServiceWorkerScope(),
@@ -118,6 +160,10 @@ export async function registerAppServiceWorker() {
 
 async function subscribeUserToPush(userId: string, registration: ServiceWorkerRegistration) {
   const existingSubscription = await registration.pushManager.getSubscription();
+  debugPush('Existing push subscription lookup completed.', {
+    hasExistingSubscription: Boolean(existingSubscription),
+    userId,
+  });
   const subscription =
     existingSubscription ??
     (await registration.pushManager.subscribe({
@@ -133,7 +179,14 @@ export async function syncPushNotifications(
   userId: string,
   options?: { requestPermission?: boolean },
 ): Promise<PushSyncResult> {
+  debugPush('Starting push sync.', {
+    requestPermission: Boolean(options?.requestPermission),
+    userId,
+    ...getSupportSnapshot(),
+  });
+
   if (!isBrowserPushSupported()) {
+    debugPush('Push sync result: unsupported.', getSupportSnapshot());
     return {
       status: 'unsupported',
       permission: 'unsupported',
@@ -141,6 +194,7 @@ export async function syncPushNotifications(
   }
 
   if (!getVapidPublicKey()) {
+    debugPush('Push sync result: disabled because VAPID public key is missing.');
     return {
       status: 'disabled',
       permission: Notification.permission,
@@ -149,6 +203,7 @@ export async function syncPushNotifications(
 
   const registration = await registerAppServiceWorker();
   if (!registration) {
+    debugPush('Push sync result: unsupported because service worker registration returned null.');
     return {
       status: 'unsupported',
       permission: 'unsupported',
@@ -156,6 +211,9 @@ export async function syncPushNotifications(
   }
 
   if (Notification.permission === 'granted' && hasSessionReadyFlag(userId)) {
+    debugPush('Push sync result: already enabled for this session.', {
+      userId,
+    });
     return {
       status: 'enabled',
       permission: 'granted',
@@ -164,10 +222,15 @@ export async function syncPushNotifications(
 
   let permission = Notification.permission;
   if (permission === 'default' && options?.requestPermission) {
+    debugPush('Requesting notification permission from the browser.');
     permission = await Notification.requestPermission();
+    debugPush('Notification permission request completed.', {
+      permission,
+    });
   }
 
   if (permission === 'denied') {
+    debugPush('Push sync result: permission denied by the browser.');
     return {
       status: 'denied',
       permission,
@@ -175,6 +238,9 @@ export async function syncPushNotifications(
   }
 
   if (permission !== 'granted') {
+    debugPush('Push sync result: waiting for a user-triggered permission request.', {
+      permission,
+    });
     return {
       status: 'needs-permission',
       permission,
@@ -182,6 +248,9 @@ export async function syncPushNotifications(
   }
 
   await subscribeUserToPush(userId, registration);
+  debugPush('Push sync result: enabled.', {
+    userId,
+  });
 
   return {
     status: 'enabled',

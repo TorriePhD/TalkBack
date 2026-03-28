@@ -565,6 +565,21 @@ p {
   object-fit: contain;
 }
 
+.home-topbar-logo-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.home-topbar-logo-button:focus-visible {
+  outline: 2px solid rgba(27, 141, 255, 0.9);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
 .app-topbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(240px, auto);

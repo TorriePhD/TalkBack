@@ -1,12 +1,16 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap");
 
 :root {
-  color-scheme: dark light;
+  color-scheme: light;
   font-family: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
   line-height: 1.45;
   font-weight: 400;
   color: #13212c;
-  background: #050a1a;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(255, 171, 120, 0.3), transparent 22%),
+    radial-gradient(circle at 84% 4%, rgba(88, 131, 255, 0.22), transparent 24%),
+    radial-gradient(circle at 72% 82%, rgba(25, 170, 140, 0.16), transparent 22%),
+    linear-gradient(180deg, #fff8f1 0%, #fdf4f0 42%, #eef5ff 100%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -47,10 +51,22 @@ body,
 
 body {
   min-height: 100vh;
-  background: #050a1a;
+  background: inherit;
   color: var(--ink);
   font-family: var(--font-body);
   overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.54), transparent 12%),
+    radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.4), transparent 11%),
+    radial-gradient(circle at 70% 76%, rgba(255, 255, 255, 0.26), transparent 16%);
+  opacity: 0.88;
 }
 
 button,
@@ -89,48 +105,6 @@ p {
   width: min(1180px, calc(100vw - 24px));
   margin: 0 auto;
   padding: 16px 0 calc(40px + env(safe-area-inset-bottom));
-}
-
-.neon-bg {
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.neon-bg-canvas,
-.neon-bg-field {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.neon-bg-canvas {
-  filter: blur(38px) saturate(122%);
-  opacity: 0.82;
-  transform: scale(1.04);
-}
-
-.neon-bg-field {
-  background:
-    radial-gradient(circle at 11% 23%, rgba(0, 229, 255, 0.16), transparent 40%),
-    radial-gradient(circle at 85% 9%, rgba(0, 136, 255, 0.14), transparent 38%),
-    radial-gradient(circle at 68% 76%, rgba(160, 0, 255, 0.18), transparent 43%),
-    radial-gradient(circle at 27% 82%, rgba(255, 45, 141, 0.14), transparent 42%);
-  mix-blend-mode: screen;
-  opacity: 0.5;
-  animation: neonFieldDrift 24s ease-in-out infinite alternate;
-}
-
-@keyframes neonFieldDrift {
-  from {
-    transform: translate3d(-1.5%, -1.2%, 0) scale(1.02);
-  }
-  to {
-    transform: translate3d(1.8%, 1.4%, 0) scale(1.06);
-  }
 }
 
 .fullscreen-loader-screen {

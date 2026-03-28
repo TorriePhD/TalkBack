@@ -152,7 +152,7 @@ export function CreateRoundPanel({
           <p>
             {stage === 'phrase'
               ? `This round goes to ${friend.username}. Once they finish, the next turn flips back.`
-              : 'Start recording when ready, stop to save the take, and send the reversed clip.'}
+              : 'Start recording when ready, stop to save the take, then send it when you are happy with your normal playback.'}
           </p>
         </div>
 
@@ -233,13 +233,13 @@ export function CreateRoundPanel({
             ) : null}
 
             <AudioPlayerCard
-              title={reversedAudioBlob ? 'What your friend will hear' : 'Latest take'}
+              title="Latest take"
               description={
-                reversedAudioBlob
-                  ? 'This flipped clip is the one that gets sent.'
+                recorder.audioBlob
+                  ? 'Replay your normal recording before you send.'
                   : 'Record once and the preview will appear here.'
               }
-              blob={reversedAudioBlob ?? recorder.audioBlob}
+              blob={recorder.audioBlob}
             />
           </div>
         ) : null}

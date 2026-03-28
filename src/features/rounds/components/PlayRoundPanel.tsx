@@ -431,10 +431,10 @@ export function PlayRoundPanel({
               </div>
 
               <AudioPlayerCard
-                title="Your prompt"
-                description="This is the forward clip your friend is about to imitate."
-                blob={round.originalAudioBlob}
-                remoteUrl={round.originalAudioUrl}
+                title="Your prompt reversed"
+                description="This is the flipped clip your friend is hearing while they record."
+                blob={round.reversedAudioBlob}
+                remoteUrl={round.reversedAudioUrl}
               />
             </div>
           ) : null}

@@ -2,6 +2,7 @@ import { supabase, supabaseConfigError } from './supabase';
 
 const PUSH_SESSION_KEY_PREFIX = 'push-subscription-ready:';
 const PUSH_DEBUG_PREFIX = '[push]';
+const PUSH_DEBUG_STORAGE_KEY = 'push-debug';
 
 export type PushSyncStatus =
   | 'disabled'
@@ -15,8 +16,37 @@ export interface PushSyncResult {
   permission: NotificationPermission | 'unsupported';
 }
 
-function debugPush(message: string, details?: unknown) {
-  if (!import.meta.env.DEV) {
+function readPushDebugPreference() {
+  if (typeof window === 'undefined') {
+    return import.meta.env.DEV;
+  }
+
+  try {
+    const currentUrl = new URL(window.location.href);
+    const queryValue = currentUrl.searchParams.get(PUSH_DEBUG_STORAGE_KEY);
+
+    if (queryValue === '1' || queryValue === 'true') {
+      window.localStorage.setItem(PUSH_DEBUG_STORAGE_KEY, '1');
+      return true;
+    }
+
+    if (queryValue === '0' || queryValue === 'false') {
+      window.localStorage.removeItem(PUSH_DEBUG_STORAGE_KEY);
+      return false;
+    }
+
+    return import.meta.env.DEV || window.localStorage.getItem(PUSH_DEBUG_STORAGE_KEY) === '1';
+  } catch {
+    return import.meta.env.DEV;
+  }
+}
+
+export function isPushDebugEnabled() {
+  return readPushDebugPreference();
+}
+
+export function debugPush(message: string, details?: unknown) {
+  if (!isPushDebugEnabled()) {
     return;
   }
 
@@ -26,6 +56,19 @@ function debugPush(message: string, details?: unknown) {
   }
 
   console.info(PUSH_DEBUG_PREFIX, message, details);
+}
+
+export function debugPushError(message: string, details?: unknown) {
+  if (!isPushDebugEnabled()) {
+    return;
+  }
+
+  if (details === undefined) {
+    console.error(PUSH_DEBUG_PREFIX, message);
+    return;
+  }
+
+  console.error(PUSH_DEBUG_PREFIX, message, details);
 }
 
 function requireSupabase() {

@@ -17,7 +17,12 @@ import {
   subscribeToAuthChanges,
 } from './lib/auth';
 import { listFriendRequests, listFriends } from './lib/friends';
-import { syncPushNotifications, type PushSyncStatus } from './lib/push';
+import {
+  debugPush,
+  debugPushError,
+  syncPushNotifications,
+  type PushSyncStatus,
+} from './lib/push';
 import { archiveCompletedRound, listRounds } from './lib/rounds';
 import { supabaseConfigError } from './lib/supabase';
 import { InstallAppPrompt } from './pwa/InstallAppPrompt';
@@ -38,8 +43,6 @@ interface ThreadSummary {
 }
 
 const DEFAULT_SIGNED_IN_VIEW: View = 'home';
-const PUSH_DEBUG_PREFIX = '[push]';
-
 function sortNewestFirst(left: Round, right: Round) {
   return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
 }
@@ -277,13 +280,11 @@ function App() {
       setIsEnablingPush(false);
 
       if (
-        import.meta.env.DEV &&
         typeof window !== 'undefined' &&
         'Notification' in window &&
         Notification.permission === 'default'
       ) {
-        console.info(
-          PUSH_DEBUG_PREFIX,
+        debugPush(
           'Notification permission is still default, but push setup is skipped until a user is signed in.',
         );
       }
@@ -298,24 +299,16 @@ function App() {
         const result = await syncPushNotifications(currentUserId);
 
         if (!cancelled) {
-          if (import.meta.env.DEV) {
-            console.info(PUSH_DEBUG_PREFIX, 'Push sync completed for signed-in user.', {
-              pushStatus: result.status,
-              userId: currentUserId,
-            });
-          }
+          debugPush('Push sync completed for signed-in user.', {
+            pushStatus: result.status,
+            userId: currentUserId,
+          });
           setPushStatus(result.status);
           setPushError(null);
         }
       } catch (error) {
         if (!cancelled) {
-          if (import.meta.env.DEV) {
-            console.error(
-              PUSH_DEBUG_PREFIX,
-              'Push sync failed for signed-in user.',
-              error,
-            );
-          }
+          debugPushError('Push sync failed for signed-in user.', error);
           setPushStatus('disabled');
           setPushError(
             error instanceof Error ? error.message : 'Unable to set up push notifications.',
@@ -570,21 +563,13 @@ function App() {
       const result = await syncPushNotifications(currentUserId, {
         requestPermission: true,
       });
-      if (import.meta.env.DEV) {
-        console.info(PUSH_DEBUG_PREFIX, 'User-triggered push enable flow completed.', {
-          pushStatus: result.status,
-          userId: currentUserId,
-        });
-      }
+      debugPush('User-triggered push enable flow completed.', {
+        pushStatus: result.status,
+        userId: currentUserId,
+      });
       setPushStatus(result.status);
     } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error(
-          PUSH_DEBUG_PREFIX,
-          'User-triggered push enable flow failed.',
-          error,
-        );
-      }
+      debugPushError('User-triggered push enable flow failed.', error);
       setPushStatus('disabled');
       setPushError(
         error instanceof Error ? error.message : 'Unable to enable push notifications.',

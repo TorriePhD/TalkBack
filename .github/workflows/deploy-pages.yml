@@ -18,11 +18,12 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: github-pages
     env:
-      BASE_PATH: ${{ vars.BASE_PATH }}
-      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-      VITE_PUSH_VAPID_PUBLIC_KEY: ${{ vars.VITE_PUSH_VAPID_PUBLIC_KEY }}
+      BASE_PATH: ${{ vars.BASE_PATH || secrets.BASE_PATH }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_PUSH_VAPID_PUBLIC_KEY: ${{ vars.VITE_PUSH_VAPID_PUBLIC_KEY || secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,6 +39,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify required public env
+        run: |
+          test -n "$VITE_SUPABASE_URL" || (echo "Missing VITE_SUPABASE_URL Actions variable." && exit 1)
+          test -n "$VITE_SUPABASE_ANON_KEY" || (echo "Missing VITE_SUPABASE_ANON_KEY Actions variable." && exit 1)
+          test -n "$VITE_PUSH_VAPID_PUBLIC_KEY" || (echo "Missing VITE_PUSH_VAPID_PUBLIC_KEY Actions variable." && exit 1)
 
       - name: Build site
         run: npm run build

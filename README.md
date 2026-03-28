@@ -109,6 +109,7 @@ To test microphone recording or home-screen install from another device on the s
 
 - Create the subscription table with `supabase db push` after applying [`supabase/migrations/20260328000000_push_subscriptions.sql`](./supabase/migrations/20260328000000_push_subscriptions.sql).
 - Generate VAPID keys locally with `npx web-push generate-vapid-keys`.
+- To enable push debug logs in a production build, open the app once with `?push-debug=1` in the URL, or run `localStorage.setItem('push-debug', '1')` in the browser console and reload.
 - Copy [`supabase/functions/.env.example`](./supabase/functions/.env.example) to `supabase/functions/.env`, fill in the values, then load them into Supabase:
 
   ```bash

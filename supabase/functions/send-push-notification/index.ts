@@ -46,6 +46,14 @@ function getTargetUserId(body: SendPushRequest) {
   return body.targetUserId ?? body.target_user_id ?? body.user_id ?? null;
 }
 
+function getSubscriptionEndpointHost(subscription: webpush.PushSubscription) {
+  try {
+    return new URL(subscription.endpoint).host;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', {
@@ -65,10 +73,18 @@ Deno.serve(async (request) => {
     const vapidPrivateKey = getRequiredEnv('VAPID_PRIVATE_KEY');
     const vapidSubject =
       Deno.env.get('VAPID_SUBJECT')?.trim() || 'mailto:notifications@example.com';
+    console.info('send-push-notification: loaded environment.', {
+      hasSupabaseUrl: Boolean(supabaseUrl),
+      hasSupabaseAnonKey: Boolean(supabaseAnonKey),
+      hasSupabaseServiceRoleKey: Boolean(supabaseServiceRoleKey),
+      hasVapidPublicKey: Boolean(vapidPublicKey),
+      hasVapidPrivateKey: Boolean(vapidPrivateKey),
+      vapidSubject,
+    });
 
     const authorization = request.headers.get('Authorization');
     if (!authorization) {
-      return jsonResponse({ sent: false, error: 'Unauthorized.' }, 401);
+      return jsonResponse({ sent: false, error: 'Missing Authorization header.' }, 401);
     }
 
     const authClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -84,13 +100,25 @@ Deno.serve(async (request) => {
     } = await authClient.auth.getUser();
 
     if (authError || !user) {
-      return jsonResponse({ sent: false, error: 'Unauthorized.' }, 401);
+      return jsonResponse(
+        {
+          sent: false,
+          error: authError?.message || 'Unable to validate the Supabase user session.',
+        },
+        401,
+      );
     }
+    console.info('send-push-notification: authenticated caller.', {
+      userId: user.id,
+    });
 
     const targetUserId = getTargetUserId((await request.json()) as SendPushRequest);
     if (!targetUserId || typeof targetUserId !== 'string') {
       return jsonResponse({ sent: false, error: 'targetUserId is required.' }, 400);
     }
+    console.info('send-push-notification: parsed target user.', {
+      targetUserId,
+    });
 
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
     const { data, error } = await adminClient
@@ -104,10 +132,34 @@ Deno.serve(async (request) => {
     }
 
     if (!data?.subscription) {
+      console.info('send-push-notification: no subscription found.', {
+        targetUserId,
+      });
       return jsonResponse({ sent: false, reason: 'subscription_not_found' });
     }
+    const endpointHost = getSubscriptionEndpointHost(data.subscription);
+    if (endpointHost === 'permanently-removed.invalid') {
+      await adminClient.from('push_subscriptions').delete().eq('id', data.id);
+      console.info('send-push-notification: removed invalid subscription endpoint.', {
+        endpointHost,
+        targetUserId,
+      });
+      return jsonResponse({
+        sent: false,
+        reason: 'invalid_subscription_endpoint',
+        error:
+          'The recipient browser returned an invalid push subscription endpoint. Microsoft Edge on Android is currently affected by this Web Push issue.',
+      });
+    }
+    console.info('send-push-notification: loaded subscription.', {
+      endpointHost: endpointHost || 'invalid-endpoint',
+      targetUserId,
+    });
 
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+    console.info('send-push-notification: configured VAPID details.', {
+      targetUserId,
+    });
 
     try {
       await webpush.sendNotification(
@@ -129,9 +181,16 @@ Deno.serve(async (request) => {
 
       throw error;
     }
+    console.info('send-push-notification: notification sent.', {
+      targetUserId,
+    });
 
     return jsonResponse({ sent: true });
   } catch (error) {
+    console.error('send-push-notification: unhandled error.', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : null,
+    });
     return jsonResponse(
       {
         sent: false,

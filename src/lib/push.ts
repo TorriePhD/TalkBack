@@ -16,6 +16,18 @@ export interface PushSyncResult {
   permission: NotificationPermission | 'unsupported';
 }
 
+interface SendPushFunctionResponse {
+  sent?: boolean;
+  reason?: string;
+  error?: string;
+}
+
+interface FunctionsHttpErrorLike {
+  context?: Response;
+  message?: string;
+  name?: string;
+}
+
 function readPushDebugPreference() {
   if (typeof window === 'undefined') {
     return import.meta.env.DEV;
@@ -69,6 +81,70 @@ export function debugPushError(message: string, details?: unknown) {
   }
 
   console.error(PUSH_DEBUG_PREFIX, message, details);
+}
+
+async function getFunctionsErrorDetails(error: unknown) {
+  const response =
+    typeof error === 'object' &&
+    error !== null &&
+    'context' in error &&
+    error.context instanceof Response
+      ? error.context
+      : null;
+
+  if (!response) {
+    return null;
+  }
+
+  try {
+    const clonedResponse = response.clone();
+    const contentType = clonedResponse.headers.get('Content-Type') || '';
+    const body = contentType.includes('application/json')
+      ? await clonedResponse.json()
+      : await clonedResponse.text();
+
+    return {
+      body,
+      headers: Object.fromEntries(clonedResponse.headers.entries()),
+      status: clonedResponse.status,
+      statusText: clonedResponse.statusText,
+    };
+  } catch {
+    return {
+      body: null,
+      headers: Object.fromEntries(response.headers.entries()),
+      status: response.status,
+      statusText: response.statusText,
+    };
+  }
+}
+
+function getFunctionsErrorMessage(
+  error: FunctionsHttpErrorLike,
+  errorDetails: Awaited<ReturnType<typeof getFunctionsErrorDetails>>,
+) {
+  if (errorDetails?.body && typeof errorDetails.body === 'object' && 'error' in errorDetails.body) {
+    const bodyError = errorDetails.body.error;
+    if (typeof bodyError === 'string' && bodyError.trim()) {
+      return bodyError;
+    }
+  }
+
+  if (
+    errorDetails?.body &&
+    typeof errorDetails.body === 'object' &&
+    'reason' in errorDetails.body &&
+    typeof errorDetails.body.reason === 'string' &&
+    errorDetails.body.reason.trim()
+  ) {
+    return `The push notification was not sent (${errorDetails.body.reason}).`;
+  }
+
+  if (errorDetails?.status) {
+    return `Edge Function returned ${errorDetails.status} ${errorDetails.statusText}`.trim();
+  }
+
+  return error.message || 'Unable to send the clip notification.';
 }
 
 function requireSupabase() {
@@ -138,6 +214,19 @@ function getServiceWorkerUrl() {
 
 function getVapidPublicKey() {
   return import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY?.trim() || '';
+}
+
+function getSubscriptionEndpointHost(subscription: PushSubscription) {
+  try {
+    return new URL(subscription.endpoint).host;
+  } catch {
+    return null;
+  }
+}
+
+function isInvalidSubscriptionEndpoint(subscription: PushSubscription) {
+  const host = getSubscriptionEndpointHost(subscription);
+  return host === 'permanently-removed.invalid';
 }
 
 function urlBase64ToUint8Array(value: string) {
@@ -223,6 +312,23 @@ async function subscribeUserToPush(userId: string, registration: ServiceWorkerRe
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(getVapidPublicKey()),
     }));
+
+  if (isInvalidSubscriptionEndpoint(subscription)) {
+    debugPushError('Browser returned an invalid push subscription endpoint.', {
+      endpoint: subscription.endpoint,
+      userId,
+    });
+
+    try {
+      await subscription.unsubscribe();
+    } catch {
+      // Ignore unsubscribe failures and surface the root cause instead.
+    }
+
+    throw new Error(
+      'This browser returned an invalid push subscription endpoint. Microsoft Edge on Android is currently affected by this Web Push issue. Use Chrome on Android or another browser for push notifications.',
+    );
+  }
 
   await savePushSubscription(userId, subscription);
   markSessionReady(userId);
@@ -328,13 +434,62 @@ export async function syncPushNotifications(
 
 export async function sendClipSentPushNotification(targetUserId: string) {
   const client = requireSupabase();
-  const { error } = await client.functions.invoke('send-push-notification', {
-    body: {
-      targetUserId,
-    },
+  const {
+    data: { session },
+  } = await client.auth.getSession();
+  const accessToken = session?.access_token ?? null;
+
+  debugPush('Preparing push edge function auth context.', {
+    hasAccessToken: Boolean(accessToken),
+    sessionUserId: session?.user?.id ?? null,
+    targetUserId,
   });
 
-  if (error) {
-    throw new Error(`Unable to send the clip notification: ${error.message}`);
+  if (!accessToken) {
+    throw new Error('Unable to send the clip notification: no active Supabase session.');
   }
+
+  debugPush('Invoking send-push-notification edge function.', {
+    targetUserId,
+  });
+  const { data, error } = await client.functions.invoke<SendPushFunctionResponse>(
+    'send-push-notification',
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: {
+        targetUserId,
+      },
+    },
+  );
+
+  if (error) {
+    const errorDetails = await getFunctionsErrorDetails(error);
+    debugPushError('send-push-notification edge function failed.', {
+      error,
+      errorDetails,
+      targetUserId,
+    });
+    throw new Error(getFunctionsErrorMessage(error, errorDetails));
+  }
+
+  debugPush('send-push-notification edge function completed.', {
+    data,
+    targetUserId,
+  });
+
+  if (!data?.sent) {
+    const reason = data?.reason ? ` (${data.reason})` : '';
+    const message = data?.error || `The push notification was not sent${reason}.`;
+    debugPushError('send-push-notification edge function reported an unsent notification.', {
+      data,
+      targetUserId,
+    });
+    throw new Error(message);
+  }
+
+  debugPush('Push notification sent successfully.', {
+    targetUserId,
+  });
 }

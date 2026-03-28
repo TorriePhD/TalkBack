@@ -118,5 +118,6 @@ To test microphone recording or home-screen install from another device on the s
   ```
 
 - The function expects `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT`.
-- Deploy the function with `supabase functions deploy send-push-notification`.
+- Deploy the function with `supabase functions deploy send-push-notification --no-verify-jwt`.
+- The repo includes [`supabase/config.toml`](./supabase/config.toml) with `verify_jwt = false` for this function because the app uses a modern `sb_publishable_...` client key. If the function was already deployed earlier, confirm in the Supabase dashboard that `send-push-notification` has `Verify JWT with legacy secret` turned off, then redeploy if needed.
 - The push payload is fixed to `Your friend sent you a clip 🎤`.

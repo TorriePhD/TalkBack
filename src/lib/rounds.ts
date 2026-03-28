@@ -212,7 +212,7 @@ export async function createRoundRecord(
   try {
     await sendClipSentPushNotification(input.recipientId);
   } catch (pushError) {
-    console.warn('Unable to send push notification for the new clip:', pushError);
+    console.warn('Unable to send push notification for the new clip. The round was created, but the recipient was not notified.', pushError);
   }
 
   return nextRound;

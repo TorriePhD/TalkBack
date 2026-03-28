@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import homeLogo from './assets/backtalk-logo.png';
 import { StarRating } from './components/StarRating';
-import { NeonAudioBackground } from './components/NeonAudioBackground';
 import { WaveformLoader } from './components/WaveformLoader';
 import { AuthPanel } from './features/auth/components/AuthPanel';
 import { CreateRoundPanel } from './features/rounds/components/CreateRoundPanel';
@@ -105,7 +104,6 @@ function LoadingPanel({ message }: { message: string }) {
 function FullscreenLoadingScreen() {
   return (
     <main className="fullscreen-loader-screen" aria-live="polite" role="status">
-      <NeonAudioBackground />
       <div className="fullscreen-loader-content">
         <img alt="BackTalk" className="fullscreen-loader-logo" src={homeLogo} />
         <WaveformLoader className="fullscreen-loader-spinner" size={128} strokeWidth={4} />
@@ -526,7 +524,6 @@ function App() {
 
   return (
     <main className="app-shell">
-      <NeonAudioBackground />
       {showSecureContextWarning ? (
         <div className="error-banner">
           This page is not running in a secure context. Microphone recording will only work on

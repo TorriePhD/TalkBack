@@ -38,17 +38,21 @@
 }
 
 html,
-body,
-#root {
-  min-height: 100%;
+body {
+  height: 100%;
   margin: 0;
+  padding: 0;
+  overscroll-behavior: none;
+  background: #0b1220;
 }
 
 body {
   position: relative;
   isolation: isolate;
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   background: linear-gradient(
     135deg,
     #00e5ff 0%,
@@ -62,7 +66,7 @@ body {
   animation: gradientShift 12s ease infinite;
   color: var(--ink);
   font-family: var(--font-body);
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 body::before {
@@ -96,6 +100,10 @@ body::after {
 #root {
   position: relative;
   z-index: 1;
+  width: 100vw;
+  height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  min-height: 100%;
+  overflow: hidden;
 }
 
 @keyframes gradientShift {
@@ -162,8 +170,48 @@ p {
   position: relative;
   z-index: 0;
   width: min(1180px, calc(100vw - 24px));
+  height: 100%;
+  min-height: 100%;
   margin: 0 auto;
-  padding: 16px 0 calc(40px + env(safe-area-inset-bottom));
+  padding: 16px 0 40px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.install-card,
+.install-card-copy {
+  display: grid;
+  gap: 12px;
+}
+
+.install-card {
+  margin-bottom: 16px;
+  padding: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.78)),
+    radial-gradient(circle at top right, rgba(124, 58, 237, 0.18), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(0, 229, 255, 0.14), transparent 38%);
+}
+
+.install-card h2 {
+  margin-bottom: 0;
+  font-size: clamp(1.45rem, 2.2vw, 1.9rem);
+}
+
+.install-card p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.install-card-tip,
+.install-card-status {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.install-card-actions {
+  align-items: center;
 }
 
 .fullscreen-loader-screen {

@@ -73,9 +73,17 @@ Production build passes:
 npm run build
 ```
 
+## PWA And GitHub Pages
+
+- The app ships with a web manifest, service worker registration, and install prompt support for Android browsers that fire `beforeinstallprompt`.
+- iPhone and iPad install is supported through Safari `Share > Add to Home Screen`.
+- `npm run dev` already binds to `0.0.0.0:5173`, so the app is reachable from other devices on the same LAN.
+- For GitHub Pages, set `BASE_PATH` or `VITE_BASE_PATH` to your repository path such as `/TalkBack/` when you need a manual override. The Vite config also auto-detects the repository name during GitHub Actions builds.
+- The manifest uses relative URLs so the install entry point works both at `/` and at a GitHub Pages repository subpath.
+
 ## HTTPS For Cross-Device Recording
 
-To test microphone recording from another device on the same LAN, serve Vite over HTTPS with a certificate trusted by that device.
+To test microphone recording or home-screen install from another device on the same LAN, serve Vite over HTTPS with a certificate trusted by that device.
 
 1. Create a local certificate and key whose SAN includes the hostname or IP address you will open from the other device.
 2. Add these lines to `.env.local`:

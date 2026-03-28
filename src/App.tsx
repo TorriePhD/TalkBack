@@ -19,6 +19,7 @@ import {
 import { listFriendRequests, listFriends } from './lib/friends';
 import { archiveCompletedRound, listRounds } from './lib/rounds';
 import { supabaseConfigError } from './lib/supabase';
+import { InstallAppPrompt } from './pwa/InstallAppPrompt';
 
 type View = 'home' | 'thread' | 'friends';
 
@@ -526,14 +527,15 @@ function App() {
     <main className="app-shell">
       {showSecureContextWarning ? (
         <div className="error-banner">
-          This page is not running in a secure context. Microphone recording will only work on
-          `localhost` or over HTTPS, so a plain LAN URL like `http://192.168.x.x:5173` can play
-          audio but cannot record it.
+          This page is not running in a secure context. Microphone recording, service workers, and
+          home-screen install only work on `localhost` or over HTTPS, so a plain LAN URL like
+          `http://192.168.x.x:5173` can load the app but cannot record or install it.
         </div>
       ) : null}
 
       {signOutError ? <div className="error-banner">{signOutError}</div> : null}
       {loadError ? <div className="error-banner">{loadError}</div> : null}
+      <InstallAppPrompt />
 
       {isAuthLoading ? (
         <LoadingPanel message="Checking your Supabase session..." />

@@ -2,7 +2,7 @@ import type { Round } from '../features/rounds/types';
 import type { ArchiveCompletedRoundSummary } from '../features/rounds/types';
 import type { RoundStarCount } from '../features/rounds/types';
 import { scoreGuess } from '../features/rounds/utils';
-import { normalizePackText } from '../utils/difficulty';
+import { computeDifficulty, normalizePackText, type WordDifficulty } from '../utils/difficulty';
 import { sendClipSentPushNotification } from './push';
 import { supabase, supabaseConfigError } from './supabase';
 import { createSignedAudioUrl, uploadAudio } from './storage/uploadAudio';
@@ -17,6 +17,7 @@ const ROUND_COLUMNS = [
   'recipient_email',
   'recipient_username',
   'correct_phrase',
+  'difficulty',
   'original_audio_path',
   'reversed_audio_path',
   'guess',
@@ -36,6 +37,7 @@ interface RoundRow {
   recipient_email: string;
   recipient_username: string;
   correct_phrase: string;
+  difficulty: WordDifficulty | null;
   original_audio_path: string;
   reversed_audio_path: string;
   guess: string | null;
@@ -49,6 +51,7 @@ interface CreateRoundRecordInput {
   currentUserId: string;
   recipientId: string;
   correctPhrase: string;
+  difficulty: WordDifficulty;
   originalAudioBlob: Blob;
   reversedAudioBlob: Blob;
 }
@@ -64,6 +67,12 @@ interface SubmitRoundGuessInput {
   roundId: string;
   guess: string;
   correctPhrase: string;
+  difficulty: WordDifficulty;
+}
+
+export interface SubmitRoundGuessResult {
+  round: Round;
+  awardedAmount: number;
 }
 
 interface ArchiveCompletedRoundInput {
@@ -83,6 +92,12 @@ interface ArchiveCompletedRoundRow {
   next_sender_id: string | null;
   last_completed_at: string | null;
 }
+
+export const difficultyMultiplier: Record<WordDifficulty, number> = {
+  easy: 1,
+  medium: 2,
+  hard: 3,
+};
 
 function requireSupabase() {
   if (!supabase) {
@@ -122,6 +137,10 @@ export function scoreToStars(score: number | null): RoundStarCount {
   return 0;
 }
 
+export function calculateCoinReward(score: number | null, difficulty: WordDifficulty) {
+  return scoreToStars(score) * difficultyMultiplier[difficulty];
+}
+
 async function mapRoundRow(row: RoundRow): Promise<Round> {
   const [originalAudioUrl, reversedAudioUrl, attemptAudioUrl, attemptReversedUrl] =
     await Promise.all([
@@ -141,6 +160,7 @@ async function mapRoundRow(row: RoundRow): Promise<Round> {
     recipientEmail: row.recipient_email,
     recipientUsername: row.recipient_username,
     correctPhrase: row.correct_phrase,
+    difficulty: row.difficulty ?? computeDifficulty(row.correct_phrase).difficulty,
     originalAudioBlob: null,
     reversedAudioBlob: null,
     originalAudioUrl,
@@ -193,6 +213,7 @@ export async function createRoundRecord(
       id: roundId,
       recipient_id: input.recipientId,
       correct_phrase: normalizePackText(input.correctPhrase),
+      difficulty: input.difficulty,
       original_audio_path: originalAudio.path,
       reversed_audio_path: reversedAudio.path,
       status: 'waiting_for_attempt',
@@ -260,26 +281,27 @@ export async function saveRoundAttempt(
 
 export async function submitRoundGuess(
   input: SubmitRoundGuessInput,
-): Promise<Round> {
+): Promise<SubmitRoundGuessResult> {
   const client = requireSupabase();
   const guess = input.guess.trim();
   const score = scoreGuess(guess, input.correctPhrase);
-  const { data, error } = await client
-    .from('rounds')
-    .update({
-      guess,
-      score,
-      status: 'complete',
-    })
-    .eq('id', input.roundId)
-    .select(ROUND_COLUMNS)
-    .single();
+  const { data, error } = await client.rpc('complete_round_and_award_resources', {
+    round_id: input.roundId,
+    guess_input: guess,
+    score_input: score,
+    difficulty_input: input.difficulty,
+  });
 
   if (error || !data) {
     throw new Error(`Unable to submit the guess: ${error?.message || 'Unknown error.'}`);
   }
 
-  return mapRoundRow(data as unknown as RoundRow);
+  const round = await mapRoundRow(data as unknown as RoundRow);
+
+  return {
+    round,
+    awardedAmount: calculateCoinReward(score, round.difficulty),
+  };
 }
 
 export async function archiveCompletedRound(

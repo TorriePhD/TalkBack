@@ -634,11 +634,22 @@ p {
   transform: translateY(-50%);
 }
 
+.home-topbar-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
 .home-topbar-logo {
   display: block;
   height: 66px;
   width: auto;
-  max-width: min(420px, calc(100vw - 92px));
+  max-width: min(420px, calc(100vw - 176px));
   object-fit: contain;
 }
 
@@ -660,6 +671,44 @@ p {
   outline: 2px solid rgba(27, 141, 255, 0.9);
   outline-offset: 4px;
   border-radius: 8px;
+}
+
+.coin-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px 14px 10px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(81, 239, 255, 0.3);
+  background:
+    linear-gradient(135deg, rgba(7, 17, 30, 0.92), rgba(17, 31, 53, 0.88)),
+    radial-gradient(circle at top left, rgba(0, 229, 255, 0.16), transparent 42%),
+    radial-gradient(circle at bottom right, rgba(255, 0, 170, 0.16), transparent 46%);
+  color: #f7fbff;
+  box-shadow:
+    0 14px 30px rgba(11, 18, 32, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 0 24px rgba(0, 229, 255, 0.16);
+  white-space: nowrap;
+}
+
+.coin-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.45)) drop-shadow(0 0 12px rgba(255, 0, 170, 0.22));
+}
+
+.coin-display-value {
+  font-size: 0.98rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 16px rgba(0, 229, 255, 0.2);
+}
+
+.coin-display-value.is-loading {
+  opacity: 0.7;
 }
 
 .app-topbar {
@@ -1674,6 +1723,10 @@ p {
     flex: 0 0 auto;
   }
 
+  .home-topbar-logo {
+    max-width: min(420px, calc(100vw - 154px));
+  }
+
   .friend-metrics,
   .game-score,
   .game-actions {
@@ -1744,6 +1797,16 @@ p {
 
   .app-topbar .hero-actions > * {
     flex: 0 0 auto;
+  }
+
+  .coin-display {
+    min-height: 44px;
+    padding: 9px 12px 9px 10px;
+  }
+
+  .coin-icon {
+    width: 20px;
+    height: 20px;
   }
 
   /* Keep stacked form fields compact when rows collapse to a column on mobile. */

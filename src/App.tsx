@@ -26,6 +26,7 @@ import {
 import { archiveCompletedRound, listRounds } from './lib/rounds';
 import { supabaseConfigError } from './lib/supabase';
 import { InstallAppPrompt } from './pwa/InstallAppPrompt';
+import { CoinDisplay, ResourceProvider } from './features/resources/ResourceProvider';
 
 type View = 'home' | 'thread' | 'friends';
 
@@ -606,206 +607,209 @@ function App() {
   const showFullscreenLoader =
     isAuthLoading || (Boolean(currentUserId) && !hasLoadedInitialData && !loadError);
 
-  if (showFullscreenLoader) {
-    return <FullscreenLoadingScreen />;
-  }
-
   return (
-    <main className="app-shell">
-      {showSecureContextWarning ? (
-        <div className="error-banner">
-          This page is not running in a secure context. Microphone recording, service workers, and
-          home-screen install only work on `localhost` or over HTTPS, so a plain LAN URL like
-          `http://192.168.x.x:5173` can load the app but cannot record or install it.
-        </div>
-      ) : null}
+    <ResourceProvider currentUserId={currentUserId}>
+      <main className="app-shell">
+        {showSecureContextWarning ? (
+          <div className="error-banner">
+            This page is not running in a secure context. Microphone recording, service workers, and
+            home-screen install only work on `localhost` or over HTTPS, so a plain LAN URL like
+            `http://192.168.x.x:5173` can load the app but cannot record or install it.
+          </div>
+        ) : null}
 
-      {signOutError ? <div className="error-banner">{signOutError}</div> : null}
-      {loadError ? <div className="error-banner">{loadError}</div> : null}
-      {pushError ? <div className="error-banner">{pushError}</div> : null}
-      {!currentUserId &&
-      typeof window !== 'undefined' &&
-      window.isSecureContext &&
-      'Notification' in window &&
-      Notification.permission === 'default' &&
-      import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY?.trim() ? (
-        <div className="info-banner notification-banner">
-          <div>
-            <strong>Sign in to enable notifications</strong>
-            <p>The browser prompt only appears after sign-in when you tap Enable notifications.</p>
+        {signOutError ? <div className="error-banner">{signOutError}</div> : null}
+        {loadError ? <div className="error-banner">{loadError}</div> : null}
+        {pushError ? <div className="error-banner">{pushError}</div> : null}
+        {!currentUserId &&
+        typeof window !== 'undefined' &&
+        window.isSecureContext &&
+        'Notification' in window &&
+        Notification.permission === 'default' &&
+        import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY?.trim() ? (
+          <div className="info-banner notification-banner">
+            <div>
+              <strong>Sign in to enable notifications</strong>
+              <p>The browser prompt only appears after sign-in when you tap Enable notifications.</p>
+            </div>
           </div>
-        </div>
-      ) : null}
-      {currentUserId && pushStatus === 'unsupported' ? (
-        <div className="info-banner notification-banner">
-          <div>
-            <strong>Push is unavailable on this device or origin</strong>
-            <p>
-              On Android this usually means the app is opened from an HTTP LAN URL instead of
-              HTTPS. Open the app over HTTPS, then reinstall the PWA from that HTTPS origin before
-              trying again.
-            </p>
-            <p>
-              Current origin:{' '}
-              <code>{typeof window !== 'undefined' ? window.location.origin : 'unknown'}</code>
-            </p>
+        ) : null}
+        {currentUserId && pushStatus === 'unsupported' ? (
+          <div className="info-banner notification-banner">
+            <div>
+              <strong>Push is unavailable on this device or origin</strong>
+              <p>
+                On Android this usually means the app is opened from an HTTP LAN URL instead of
+                HTTPS. Open the app over HTTPS, then reinstall the PWA from that HTTPS origin before
+                trying again.
+              </p>
+              <p>
+                Current origin:{' '}
+                <code>{typeof window !== 'undefined' ? window.location.origin : 'unknown'}</code>
+              </p>
+            </div>
           </div>
-        </div>
-      ) : null}
-      {currentUserId && pushStatus === 'disabled' ? (
-        <div className="info-banner notification-banner">
-          <div>
-            <strong>Push is not configured for this deployment</strong>
-            <p>
-              This build is missing the public VAPID key, so the app cannot request notification
-              permission or create a push subscription.
-            </p>
-            <p>
-              For GitHub Pages, add <code>VITE_PUSH_VAPID_PUBLIC_KEY</code> as a repository Actions
-              variable, then redeploy.
-            </p>
+        ) : null}
+        {currentUserId && pushStatus === 'disabled' ? (
+          <div className="info-banner notification-banner">
+            <div>
+              <strong>Push is not configured for this deployment</strong>
+              <p>
+                This build is missing the public VAPID key, so the app cannot request notification
+                permission or create a push subscription.
+              </p>
+              <p>
+                For GitHub Pages, add <code>VITE_PUSH_VAPID_PUBLIC_KEY</code> as a repository Actions
+                variable, then redeploy.
+              </p>
+            </div>
           </div>
-        </div>
-      ) : null}
-      {currentUserId && pushStatus === 'needs-permission' ? (
-        <div className="info-banner notification-banner">
-          <div>
-            <strong>Enable notifications</strong>
-            <p>Get a heads-up when your friend sends you a clip.</p>
-          </div>
-          <div className="button-row notification-banner-actions">
-            <button
-              className="button secondary"
-              disabled={isEnablingPush}
-              onClick={() => {
-                void handleEnablePushNotifications();
-              }}
-              type="button"
-            >
-              {isEnablingPush ? 'Enabling notifications...' : 'Enable notifications'}
-            </button>
-          </div>
-        </div>
-      ) : null}
-      <InstallAppPrompt />
-
-      {isAuthLoading ? (
-        <LoadingPanel message="Checking your Supabase session..." />
-      ) : !currentUserId ? (
-        <AuthPanel />
-      ) : (
-        <>
-          <div className="home-topbar">
-            <button
-              aria-label="Open menu"
-              className="drawer-toggle"
-              onClick={() => setIsMenuOpen(true)}
-              type="button"
-            >
-              <span />
-              <span />
-              <span />
-            </button>
-            <button
-              aria-label="Go to home"
-              className="home-topbar-logo-button"
-              onClick={handleOpenHome}
-              type="button"
-            >
-              <img alt="BackTalk" className="home-topbar-logo" src={homeLogo} />
-            </button>
-          </div>
-
-          {isMenuOpen ? (
-            <>
+        ) : null}
+        {currentUserId && pushStatus === 'needs-permission' ? (
+          <div className="info-banner notification-banner">
+            <div>
+              <strong>Enable notifications</strong>
+              <p>Get a heads-up when your friend sends you a clip.</p>
+            </div>
+            <div className="button-row notification-banner-actions">
               <button
-                aria-label="Close menu"
-                className="shell-drawer-backdrop"
-                onClick={() => setIsMenuOpen(false)}
+                className="button secondary"
+                disabled={isEnablingPush}
+                onClick={() => {
+                  void handleEnablePushNotifications();
+                }}
                 type="button"
-              />
-              <aside className="shell-drawer-panel">
-                <div className="section-header compact-header">
-                  <div>
-                    <div className="eyebrow">Menu</div>
-                    <h3>Navigate</h3>
-                    <p>{profile?.username ? `@${profile.username}` : 'Signed in'}</p>
-                  </div>
-                </div>
-
-                <nav className="nav-row" aria-label="Primary">
-                  <DrawerButton active={view === 'home'} onClick={handleOpenHome}>
-                    Home
-                  </DrawerButton>
-                  <DrawerButton active={view === 'friends'} onClick={handleOpenFriends}>
-                    Friends
-                  </DrawerButton>
-                  <DrawerButton
-                    onClick={() => {
-                      void handleSignOut();
-                    }}
-                  >
-                    Sign Out
-                  </DrawerButton>
-                </nav>
-              </aside>
-            </>
-          ) : null}
-
-          {isLoadingData ? (
-            <LoadingPanel message="Loading your friends, threads, and scores..." />
-          ) : null}
-
-          <div className="stack">
-            {view === 'home' ? (
-              <HomePanel
-                createGameOptions={createGameOptions}
-                friends={homeFriendRows}
-                onCreateGame={handleCreateGame}
-                onOpenFriend={handleSelectFriend}
-                onOpenFriends={handleOpenFriends}
-              />
-            ) : null}
-            {view === 'friends' ? (
-              <FriendsPanel friends={friends} onRefresh={refreshAppData} requests={requests} />
-            ) : null}
-            {view === 'thread' && profile && selectedThread?.displayRound && !isComposingNextRound ? (
-              <PlayRoundPanel
-                currentUserId={currentUserId}
-                onArchiveRound={handleArchiveRound}
-                onBack={handleOpenHome}
-                onComposeNextRound={() => setIsComposingNextRound(true)}
-                onUpdateRound={handleUpdateRound}
-                round={selectedThread.displayRound}
-              />
-            ) : null}
-            {view === 'thread' &&
-            profile &&
-            selectedThread &&
-            (isComposingNextRound || (!selectedThread.displayRound && selectedThread.canCurrentUserStart)) ? (
-              <CreateRoundPanel
-                currentUserId={profile.id}
-                currentUserUsername={profile.username}
-                friend={selectedThread.friend}
-                onBack={handleBackFromCreateRound}
-                onCreateRound={handleCreateRound}
-              />
-            ) : null}
-            {view === 'thread' &&
-            selectedThread &&
-            !selectedThread.displayRound &&
-            !isComposingNextRound &&
-            !selectedThread.canCurrentUserStart ? (
-              <WaitingThreadPanel
-                canCurrentUserStart={selectedThread.canCurrentUserStart}
-                friend={selectedThread.friend}
-                onBack={handleOpenHome}
-              />
-            ) : null}
+              >
+                {isEnablingPush ? 'Enabling notifications...' : 'Enable notifications'}
+              </button>
+            </div>
           </div>
-        </>
-      )}
-    </main>
+        ) : null}
+        <InstallAppPrompt />
+
+        {isAuthLoading ? (
+          <LoadingPanel message="Checking your Supabase session..." />
+        ) : !currentUserId ? (
+          <AuthPanel />
+        ) : showFullscreenLoader ? (
+          <FullscreenLoadingScreen />
+        ) : (
+          <>
+            <div className="home-topbar">
+              <button
+                aria-label="Open menu"
+                className="drawer-toggle"
+                onClick={() => setIsMenuOpen(true)}
+                type="button"
+              >
+                <span />
+                <span />
+                <span />
+              </button>
+              <button
+                aria-label="Go to home"
+                className="home-topbar-logo-button"
+                onClick={handleOpenHome}
+                type="button"
+              >
+                <img alt="BackTalk" className="home-topbar-logo" src={homeLogo} />
+              </button>
+              <div className="home-topbar-actions">
+                <CoinDisplay />
+              </div>
+            </div>
+
+            {isMenuOpen ? (
+              <>
+                <button
+                  aria-label="Close menu"
+                  className="shell-drawer-backdrop"
+                  onClick={() => setIsMenuOpen(false)}
+                  type="button"
+                />
+                <aside className="shell-drawer-panel">
+                  <div className="section-header compact-header">
+                    <div>
+                      <div className="eyebrow">Menu</div>
+                      <h3>Navigate</h3>
+                      <p>{profile?.username ? `@${profile.username}` : 'Signed in'}</p>
+                    </div>
+                  </div>
+
+                  <nav className="nav-row" aria-label="Primary">
+                    <DrawerButton active={view === 'home'} onClick={handleOpenHome}>
+                      Home
+                    </DrawerButton>
+                    <DrawerButton active={view === 'friends'} onClick={handleOpenFriends}>
+                      Friends
+                    </DrawerButton>
+                    <DrawerButton
+                      onClick={() => {
+                        void handleSignOut();
+                      }}
+                    >
+                      Sign Out
+                    </DrawerButton>
+                  </nav>
+                </aside>
+              </>
+            ) : null}
+
+            {isLoadingData ? (
+              <LoadingPanel message="Loading your friends, threads, and scores..." />
+            ) : null}
+
+            <div className="stack">
+              {view === 'home' ? (
+                <HomePanel
+                  createGameOptions={createGameOptions}
+                  friends={homeFriendRows}
+                  onCreateGame={handleCreateGame}
+                  onOpenFriend={handleSelectFriend}
+                  onOpenFriends={handleOpenFriends}
+                />
+              ) : null}
+              {view === 'friends' ? (
+                <FriendsPanel friends={friends} onRefresh={refreshAppData} requests={requests} />
+              ) : null}
+              {view === 'thread' && profile && selectedThread?.displayRound && !isComposingNextRound ? (
+                <PlayRoundPanel
+                  currentUserId={currentUserId}
+                  onArchiveRound={handleArchiveRound}
+                  onBack={handleOpenHome}
+                  onComposeNextRound={() => setIsComposingNextRound(true)}
+                  onUpdateRound={handleUpdateRound}
+                  round={selectedThread.displayRound}
+                />
+              ) : null}
+              {view === 'thread' &&
+              profile &&
+              selectedThread &&
+              (isComposingNextRound || (!selectedThread.displayRound && selectedThread.canCurrentUserStart)) ? (
+                <CreateRoundPanel
+                  currentUserId={profile.id}
+                  currentUserUsername={profile.username}
+                  friend={selectedThread.friend}
+                  onBack={handleBackFromCreateRound}
+                  onCreateRound={handleCreateRound}
+                />
+              ) : null}
+              {view === 'thread' &&
+              selectedThread &&
+              !selectedThread.displayRound &&
+              !isComposingNextRound &&
+              !selectedThread.canCurrentUserStart ? (
+                <WaitingThreadPanel
+                  canCurrentUserStart={selectedThread.canCurrentUserStart}
+                  friend={selectedThread.friend}
+                  onBack={handleOpenHome}
+                />
+              ) : null}
+            </div>
+          </>
+        )}
+      </main>
+    </ResourceProvider>
   );
 }
 

@@ -1,3 +1,5 @@
+import type { WordDifficulty } from '../../utils/difficulty';
+
 export type RoundStatus = 'waiting_for_attempt' | 'attempted' | 'complete';
 export type RoundStarCount = 0 | 1 | 2 | 3;
 
@@ -26,6 +28,7 @@ export interface Round {
   recipientEmail: string;
   recipientUsername: string;
   correctPhrase: string;
+  difficulty: WordDifficulty;
   originalAudioBlob: Blob | null;
   reversedAudioBlob: Blob | null;
   originalAudioUrl: string | null;

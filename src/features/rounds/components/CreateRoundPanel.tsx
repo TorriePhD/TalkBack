@@ -191,6 +191,7 @@ export function CreateRoundPanel({
         currentUserId,
         recipientId: friend.id,
         correctPhrase: selectedOption.text,
+        difficulty: selectedOption.displayDifficulty,
         originalAudioBlob: recorder.audioBlob,
         reversedAudioBlob,
       });

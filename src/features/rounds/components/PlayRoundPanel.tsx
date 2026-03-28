@@ -4,8 +4,10 @@ import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import { StarRating } from '../../../components/StarRating';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
-import { saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
+import { useCoins } from '../../resources/ResourceProvider';
+import { calculateCoinReward, saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
 import { getRoundSummary, getScorePresentation } from '../scorePresentation';
+import { scoreGuess } from '../utils';
 import type { Round } from '../types';
 
 interface PlayRoundPanelProps {
@@ -73,6 +75,7 @@ export function PlayRoundPanel({
   onUpdateRound,
 }: PlayRoundPanelProps) {
   const recorder = useAudioRecorder({ preparedStreamIdleMs: 0 });
+  const { applyOptimisticCoinDelta, refreshCoins } = useCoins();
   const [guess, setGuess] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -231,12 +234,18 @@ export function PlayRoundPanel({
     setError(null);
     setInfo(null);
     setIsSubmittingGuess(true);
+    const optimisticAwardAmount = calculateCoinReward(
+      scoreGuess(nextGuess, round.correctPhrase),
+      round.difficulty,
+    );
+    const rollbackOptimisticCoins = applyOptimisticCoinDelta(optimisticAwardAmount);
 
     try {
-      const updatedRound = await submitRoundGuess({
+      const { round: updatedRound, awardedAmount } = await submitRoundGuess({
         roundId: round.id,
         guess: nextGuess,
         correctPhrase: round.correctPhrase,
+        difficulty: round.difficulty,
       });
 
       onUpdateRound(round.id, (currentRound) => ({
@@ -246,8 +255,25 @@ export function PlayRoundPanel({
         attemptAudioBlob: currentRound.attemptAudioBlob,
         attemptReversedBlob: currentRound.attemptReversedBlob,
       }));
-      setInfo('Score revealed.');
+      try {
+        await refreshCoins();
+      } catch (refreshError) {
+        console.warn('Unable to refresh BB Coins after rewarding the round.', refreshError);
+      }
+
+      setInfo(
+        awardedAmount > 0
+          ? `Score revealed. +${awardedAmount} BB Coins.`
+          : 'Score revealed.',
+      );
     } catch (caughtError) {
+      rollbackOptimisticCoins();
+      try {
+        await refreshCoins();
+      } catch (refreshError) {
+        console.warn('Unable to reconcile BB Coins after a failed reward update.', refreshError);
+      }
+
       setError(
         caughtError instanceof Error ? caughtError.message : 'Unable to submit the guess.',
       );

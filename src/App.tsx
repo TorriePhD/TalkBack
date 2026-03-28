@@ -552,7 +552,14 @@ function App() {
               <span />
               <span />
             </button>
-            <img alt="BackTalk" className="home-topbar-logo" src={homeLogo} />
+            <button
+              aria-label="Go to home"
+              className="home-topbar-logo-button"
+              onClick={handleOpenHome}
+              type="button"
+            >
+              <img alt="BackTalk" className="home-topbar-logo" src={homeLogo} />
+            </button>
           </div>
 
           {isMenuOpen ? (

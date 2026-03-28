@@ -256,6 +256,11 @@ export function PlayRoundPanel({
     }
   };
 
+  const handleReadyToImitate = async () => {
+    setHasConfirmedListen(true);
+    await recorder.prepareRecording();
+  };
+
   const handleArchiveRound = async () => {
     setError(null);
     setInfo(null);
@@ -484,7 +489,7 @@ export function PlayRoundPanel({
             <button
               className="button primary"
               onClick={() => {
-                setHasConfirmedListen(true);
+                void handleReadyToImitate();
               }}
               type="button"
             >

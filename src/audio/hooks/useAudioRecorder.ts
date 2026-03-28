@@ -18,20 +18,36 @@ interface UseAudioRecorderResult {
   error: string | null;
   mimeType: string | null;
   liveStream: MediaStream | null;
+  permissionState: MicrophonePermissionState;
 }
+
+type MicrophonePermissionState = PermissionState | 'unsupported' | 'unknown';
 
 function stopStream(stream: MediaStream | null) {
   stream?.getTracks().forEach((track) => track.stop());
 }
 
-function toRecorderError(error: unknown): string {
+function getMicrophoneBlockedMessage(permissionState: MicrophonePermissionState): string {
+  if (!window.isSecureContext) {
+    return 'Microphone access was blocked. Many browsers require HTTPS or localhost for recording.';
+  }
+
+  if (permissionState === 'denied') {
+    return 'Microphone access is blocked for this site. Open browser site settings, allow Microphone, then try again.';
+  }
+
+  return 'Microphone access was blocked before the browser granted it. Check browser site permissions and try again.';
+}
+
+function toRecorderError(
+  error: unknown,
+  permissionState: MicrophonePermissionState = 'unknown',
+): string {
   if (error instanceof DOMException) {
     switch (error.name) {
       case 'NotAllowedError':
       case 'SecurityError':
-        return window.isSecureContext
-          ? 'Microphone access was blocked. Check browser permissions and try again.'
-          : 'Microphone access was blocked. Many browsers require HTTPS or localhost for recording.';
+        return getMicrophoneBlockedMessage(permissionState);
       case 'NotFoundError':
       case 'DevicesNotFoundError':
         return 'No microphone was found on this device.';
@@ -70,9 +86,9 @@ function getRecorderEnvironmentError() {
   return null;
 }
 
-async function getMicrophonePermissionState(): Promise<PermissionState | null> {
+async function getMicrophonePermissionState(): Promise<MicrophonePermissionState> {
   if (typeof window === 'undefined' || !('permissions' in navigator) || !navigator.permissions) {
-    return null;
+    return 'unsupported';
   }
 
   try {
@@ -82,7 +98,7 @@ async function getMicrophonePermissionState(): Promise<PermissionState | null> {
 
     return status.state;
   } catch {
-    return null;
+    return 'unknown';
   }
 }
 
@@ -105,6 +121,8 @@ export function useAudioRecorder(
   const [error, setError] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string | null>(null);
   const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
+  const [permissionState, setPermissionState] =
+    useState<MicrophonePermissionState>('unknown');
 
   const clearRecording = useCallback(() => {
     setAudioBlob(null);
@@ -205,10 +223,20 @@ export function useAudioRecorder(
       setIsPreparing(true);
 
       try {
+        const currentPermissionState = await getMicrophonePermissionState();
+        if (isMountedRef.current) {
+          setPermissionState(currentPermissionState);
+        }
+
+        if (currentPermissionState === 'denied') {
+          throw new DOMException('Microphone permission denied.', 'NotAllowedError');
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
         if (isMountedRef.current) {
           setLiveStream(stream);
+          setPermissionState('granted');
         }
         schedulePreparedStreamRelease();
 
@@ -216,8 +244,10 @@ export function useAudioRecorder(
           setIsPrepared(true);
         }
       } catch (caughtError) {
+        const nextPermissionState = await getMicrophonePermissionState();
         if (isMountedRef.current) {
-          setError(toRecorderError(caughtError));
+          setPermissionState(nextPermissionState);
+          setError(toRecorderError(caughtError, nextPermissionState));
         }
         releaseRecordingResources();
       } finally {
@@ -378,6 +408,63 @@ export function useAudioRecorder(
   }, [releaseRecordingResources]);
 
   useEffect(() => {
+    let cancelled = false;
+    let permissionStatus: PermissionStatus | null = null;
+    let removeChangeListener: (() => void) | null = null;
+
+    void (async () => {
+      const currentPermissionState = await getMicrophonePermissionState();
+      if (!cancelled && isMountedRef.current) {
+        setPermissionState(currentPermissionState);
+      }
+
+      if (
+        typeof window === 'undefined' ||
+        !('permissions' in navigator) ||
+        !navigator.permissions
+      ) {
+        return;
+      }
+
+      try {
+        permissionStatus = await navigator.permissions.query({
+          name: 'microphone' as PermissionName,
+        });
+      } catch {
+        return;
+      }
+
+      const handlePermissionChange = () => {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setPermissionState(permissionStatus?.state ?? 'unknown');
+      };
+
+      if (typeof permissionStatus.addEventListener === 'function') {
+        permissionStatus.addEventListener('change', handlePermissionChange);
+        removeChangeListener = () => {
+          permissionStatus?.removeEventListener('change', handlePermissionChange);
+        };
+        return;
+      }
+
+      permissionStatus.onchange = handlePermissionChange;
+      removeChangeListener = () => {
+        if (permissionStatus) {
+          permissionStatus.onchange = null;
+        }
+      };
+    })();
+
+    return () => {
+      cancelled = true;
+      removeChangeListener?.();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!prepareOnMount) {
       return;
     }
@@ -410,5 +497,6 @@ export function useAudioRecorder(
     error,
     mimeType,
     liveStream,
+    permissionState,
   };
 }

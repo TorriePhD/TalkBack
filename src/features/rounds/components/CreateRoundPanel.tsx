@@ -114,6 +114,11 @@ export function CreateRoundPanel({
     recorder.clearRecording();
   };
 
+  const handleEnterRecordStage = async () => {
+    setStage('record');
+    await recorder.prepareRecording();
+  };
+
   const handleCreateRound = async () => {
     if (!recorder.audioBlob || !reversedAudioBlob) {
       return;
@@ -251,7 +256,9 @@ export function CreateRoundPanel({
             <button
               className="button primary"
               disabled={!canContinueToRecord}
-              onClick={() => setStage('record')}
+              onClick={() => {
+                void handleEnterRecordStage();
+              }}
               type="button"
             >
               Record prompt

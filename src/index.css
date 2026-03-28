@@ -189,9 +189,10 @@ p {
   margin-bottom: 16px;
   padding: 20px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.78)),
-    radial-gradient(circle at top right, rgba(124, 58, 237, 0.18), transparent 42%),
-    radial-gradient(circle at bottom left, rgba(0, 229, 255, 0.14), transparent 38%);
+    linear-gradient(135deg, rgba(255, 255, 255, 1), rgba(248, 250, 255, 1)),
+    radial-gradient(circle at top right, rgba(124, 58, 237, 0.1), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(0, 229, 255, 0.08), transparent 38%);
+  border-color: rgba(19, 33, 44, 0.12);
 }
 
 .install-card h2 {
@@ -218,6 +219,9 @@ p {
   display: grid;
   gap: 14px;
   margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--ink);
+  border-color: rgba(19, 33, 44, 0.12);
 }
 
 .notification-banner p,
@@ -227,6 +231,12 @@ p {
 
 .notification-banner p {
   margin-bottom: 0;
+  color: var(--muted);
+}
+
+.notification-banner code {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .notification-banner-actions {

@@ -124,6 +124,14 @@ export function useAudioRecorder(
   const [permissionState, setPermissionState] =
     useState<MicrophonePermissionState>('unknown');
 
+  const refreshPermissionState = useCallback(async () => {
+    const nextPermissionState = await getMicrophonePermissionState();
+    if (isMountedRef.current) {
+      setPermissionState(nextPermissionState);
+    }
+    return nextPermissionState;
+  }, []);
+
   const clearRecording = useCallback(() => {
     setAudioBlob(null);
     setError(null);
@@ -223,15 +231,12 @@ export function useAudioRecorder(
       setIsPreparing(true);
 
       try {
-        const currentPermissionState = await getMicrophonePermissionState();
-        if (isMountedRef.current) {
-          setPermissionState(currentPermissionState);
-        }
-
-        if (currentPermissionState === 'denied') {
+        if (permissionState === 'denied') {
           throw new DOMException('Microphone permission denied.', 'NotAllowedError');
         }
 
+        // Call getUserMedia immediately from the user-triggered path so mobile
+        // browsers keep the permission prompt tied to the original gesture.
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
         if (isMountedRef.current) {
@@ -244,9 +249,8 @@ export function useAudioRecorder(
           setIsPrepared(true);
         }
       } catch (caughtError) {
-        const nextPermissionState = await getMicrophonePermissionState();
+        const nextPermissionState = await refreshPermissionState();
         if (isMountedRef.current) {
-          setPermissionState(nextPermissionState);
           setError(toRecorderError(caughtError, nextPermissionState));
         }
         releaseRecordingResources();
@@ -263,7 +267,12 @@ export function useAudioRecorder(
 
     preparePromiseRef.current = nextPromise;
     await nextPromise;
-  }, [releaseRecordingResources, schedulePreparedStreamRelease]);
+  }, [
+    permissionState,
+    refreshPermissionState,
+    releaseRecordingResources,
+    schedulePreparedStreamRelease,
+  ]);
 
   const createRecorder = useCallback((stream: MediaStream) => {
     const preferredMimeType = getPreferredAudioMimeType();
@@ -413,7 +422,7 @@ export function useAudioRecorder(
     let removeChangeListener: (() => void) | null = null;
 
     void (async () => {
-      const currentPermissionState = await getMicrophonePermissionState();
+      const currentPermissionState = await refreshPermissionState();
       if (!cancelled && isMountedRef.current) {
         setPermissionState(currentPermissionState);
       }
@@ -462,7 +471,7 @@ export function useAudioRecorder(
       cancelled = true;
       removeChangeListener?.();
     };
-  }, []);
+  }, [refreshPermissionState]);
 
   useEffect(() => {
     if (!prepareOnMount) {

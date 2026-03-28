@@ -257,8 +257,8 @@ export function PlayRoundPanel({
   };
 
   const handleReadyToImitate = async () => {
-    setHasConfirmedListen(true);
     await recorder.prepareRecording();
+    setHasConfirmedListen(true);
   };
 
   const handleArchiveRound = async () => {

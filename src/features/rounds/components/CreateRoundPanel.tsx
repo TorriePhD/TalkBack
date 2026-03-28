@@ -115,8 +115,8 @@ export function CreateRoundPanel({
   };
 
   const handleEnterRecordStage = async () => {
-    setStage('record');
     await recorder.prepareRecording();
+    setStage('record');
   };
 
   const handleCreateRound = async () => {

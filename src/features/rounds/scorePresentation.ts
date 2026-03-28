@@ -137,7 +137,7 @@ export function getRoundSummary(round: Round, isRecipient: boolean): RoundSummar
   if (round.status === 'complete') {
     return {
       headline: `${round.recipientUsername} finished the round.`,
-      description: 'Review their attempt, see the score, then continue the thread.',
+      description: 'See the score and continue the thread.',
       callToAction: 'Open the review and move to the next turn.',
     };
   }

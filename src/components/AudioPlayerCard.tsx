@@ -21,12 +21,8 @@ export function AudioPlayerCard({
     <article className="audio-card">
       <div className="audio-card-head">
         <div>
-          <div className="card-kicker">Audio clip</div>
           <h4>{title}</h4>
         </div>
-        <span className={`badge ${src ? 'complete' : 'waiting_for_attempt'}`}>
-          {src ? 'Ready' : 'Locked'}
-        </span>
       </div>
       <p>{description}</p>
       {src ? (

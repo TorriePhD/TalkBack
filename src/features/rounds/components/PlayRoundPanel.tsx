@@ -4,7 +4,6 @@ import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import { StarRating } from '../../../components/StarRating';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
-import { StatusBadge } from '../../../components/StatusBadge';
 import { saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
 import { getRoundSummary, getScorePresentation } from '../scorePresentation';
 import type { Round } from '../types';
@@ -247,7 +246,7 @@ export function PlayRoundPanel({
         attemptAudioBlob: currentRound.attemptAudioBlob,
         attemptReversedBlob: currentRound.attemptReversedBlob,
       }));
-      setInfo(getScorePresentation(updatedRound.score).celebration);
+      setInfo('Score revealed.');
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : 'Unable to submit the guess.',
@@ -309,21 +308,10 @@ export function PlayRoundPanel({
   return (
     <section className="surface round-screen">
       <div className="round-screen-header">
-        <button className="button ghost round-screen-back" onClick={onBack} type="button">
-          Back
-        </button>
-
         <div className="round-screen-copy">
           <div className="eyebrow">{isRecipient ? getRecipientStepLabel(recipientStage) : 'Round Review'}</div>
           <h2>{roundSummary?.headline ?? 'Round'}</h2>
           <p>{roundSummary?.description}</p>
-        </div>
-
-        <div className="pill-row round-screen-meta">
-          <span className="badge primary">
-            {isRecipient ? `From ${round.senderUsername}` : `To ${round.recipientUsername}`}
-          </span>
-          <StatusBadge status={round.status} />
         </div>
       </div>
 
@@ -414,13 +402,11 @@ export function PlayRoundPanel({
                     value={scorePresentation.starCount}
                   />
                 )}
-                <p>{scorePresentation.celebration}</p>
-                <p>{scorePresentation.description}</p>
                 <p>
-                  <strong>Guess:</strong> {round.guess || 'No guess submitted'}
+                  <strong>You guessed:</strong> {round.guess || 'No guess submitted'}
                 </p>
                 <p>
-                  <strong>Original phrase:</strong> {round.correctPhrase}
+                  <strong>{round.senderUsername} said:</strong> {round.correctPhrase}
                 </p>
               </div>
 
@@ -478,13 +464,11 @@ export function PlayRoundPanel({
                     value={scorePresentation.starCount}
                   />
                 )}
-                <p>{scorePresentation.celebration}</p>
-                <p>{scorePresentation.description}</p>
                 <p>
-                  <strong>Guess:</strong> {round.guess || 'No guess submitted'}
+                  <strong>You said:</strong> {round.correctPhrase}
                 </p>
                 <p>
-                  <strong>Original phrase:</strong> {round.correctPhrase}
+                  <strong>{round.recipientUsername} guessed:</strong> {round.guess || 'No guess submitted'}
                 </p>
               </div>
 

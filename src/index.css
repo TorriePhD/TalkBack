@@ -572,6 +572,11 @@ p {
   padding: 0;
   line-height: 0;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home-topbar-logo-button:active {
+  background: transparent;
 }
 
 .home-topbar-logo-button:focus-visible {

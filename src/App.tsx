@@ -48,49 +48,6 @@ function isRoundForFriend(round: Round, currentUserId: string, friendId: string)
   );
 }
 
-function getThreadDescription(
-  friend: Friend,
-  round: Round | null,
-  currentUserId: string,
-  options: {
-    canCurrentUserStart: boolean;
-    canRecipientComposeNext: boolean;
-    reviewRound: Round | null;
-  },
-) {
-  const { canCurrentUserStart, canRecipientComposeNext, reviewRound } = options;
-
-  if (reviewRound) {
-    return `Review ${friend.username}'s imitation of your previous prompt, then continue into the next round.`;
-  }
-
-  if (!round) {
-    if (canRecipientComposeNext) {
-      return `Your last guess is locked in. Record the next prompt for ${friend.username}.`;
-    }
-
-    return canCurrentUserStart
-      ? `There is no live round right now. Start the next prompt for ${friend.username}.`
-      : `${friend.username} is up to record the next prompt.`;
-  }
-
-  if (round.status === 'complete') {
-    return round.senderId === currentUserId
-      ? 'Their imitation and score are ready for review.'
-      : 'Your score is locked in. Record the next prompt to keep the chain moving.';
-  }
-
-  if (round.recipientId === currentUserId) {
-    return round.status === 'attempted'
-      ? 'Your take is saved. Submit the guess, then you will record the next prompt.'
-      : 'Listen to the reversed prompt, record your imitation, and keep the chain moving.';
-  }
-
-  return round.status === 'attempted'
-    ? 'They recorded a take and are finishing the guess.'
-    : 'Waiting for them to imitate your prompt.';
-}
-
 function getSelectedFriendIdFromRound(round: Round | null, currentUserId: string | null) {
   if (!round || !currentUserId) {
     return null;
@@ -450,38 +407,6 @@ function App() {
     [selectedFriendId, threadSummaries],
   );
 
-  const currentPageTitle = useMemo(() => {
-    switch (view) {
-      case 'friends':
-        return 'Friends';
-      case 'thread':
-        return selectedThread?.friend.username ?? 'Thread';
-      case 'home':
-      default:
-        return 'Home';
-    }
-  }, [selectedThread?.friend.username, view]);
-
-  const currentPageDescription = useMemo(() => {
-    if (view === 'home') {
-      return 'Each friend has one running chain. Review the previous round, play the current one, then record the next prompt.';
-    }
-
-    if (view === 'friends') {
-      return 'Invite people here, then jump back to Home to open their thread.';
-    }
-
-    if (selectedThread && currentUserId) {
-      return getThreadDescription(selectedThread.friend, selectedThread.displayRound, currentUserId, {
-        canCurrentUserStart: selectedThread.canCurrentUserStart,
-        canRecipientComposeNext: selectedThread.canRecipientComposeNext,
-        reviewRound: selectedThread.reviewRound,
-      });
-    }
-
-    return 'Pick a friend from Home to open the current thread.';
-  }, [currentUserId, selectedThread, view]);
-
   const handleSelectFriend = (friendId: string) => {
     setSelectedFriendId(friendId);
     setIsComposingNextRound(false);
@@ -616,51 +541,19 @@ function App() {
         <AuthPanel />
       ) : (
         <>
-          {view === 'home' ? (
-            <div className="home-topbar">
-              <button
-                aria-label="Open menu"
-                className="drawer-toggle"
-                onClick={() => setIsMenuOpen(true)}
-                type="button"
-              >
-                <span />
-                <span />
-                <span />
-              </button>
-              <img alt="BackTalk" className="home-topbar-logo" src={homeLogo} />
-            </div>
-          ) : (
-            <section className="surface app-topbar">
-              <div className="button-row hero-actions">
-                <button
-                  aria-label="Open menu"
-                  className="drawer-toggle"
-                  onClick={() => setIsMenuOpen(true)}
-                  type="button"
-                >
-                  <span />
-                  <span />
-                  <span />
-                </button>
-              </div>
-
-              <div>
-                <div className="eyebrow">BackTalk</div>
-                <h1>{currentPageTitle}</h1>
-                <p>{currentPageDescription}</p>
-              </div>
-
-              <div className="app-topbar-side">
-                <div className="meta-chip topbar-meta">
-                  <strong>{profile?.username ? `@${profile.username}` : 'Loading profile...'}</strong>
-                  <span>
-                    {friends.length} friend{friends.length === 1 ? '' : 's'} connected
-                  </span>
-                </div>
-              </div>
-            </section>
-          )}
+          <div className="home-topbar">
+            <button
+              aria-label="Open menu"
+              className="drawer-toggle"
+              onClick={() => setIsMenuOpen(true)}
+              type="button"
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+            <img alt="BackTalk" className="home-topbar-logo" src={homeLogo} />
+          </div>
 
           {isMenuOpen ? (
             <>

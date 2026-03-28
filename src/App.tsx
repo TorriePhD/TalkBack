@@ -651,6 +651,22 @@ function App() {
           </div>
         </div>
       ) : null}
+      {currentUserId && pushStatus === 'unsupported' ? (
+        <div className="info-banner notification-banner">
+          <div>
+            <strong>Push is unavailable on this device or origin</strong>
+            <p>
+              On Android this usually means the app is opened from an HTTP LAN URL instead of
+              HTTPS. Open the app over HTTPS, then reinstall the PWA from that HTTPS origin before
+              trying again.
+            </p>
+            <p>
+              Current origin:{' '}
+              <code>{typeof window !== 'undefined' ? window.location.origin : 'unknown'}</code>
+            </p>
+          </div>
+        </div>
+      ) : null}
       {currentUserId && pushStatus === 'needs-permission' ? (
         <div className="info-banner notification-banner">
           <div>

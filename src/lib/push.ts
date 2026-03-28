@@ -50,6 +50,16 @@ function isBrowserPushSupported() {
   );
 }
 
+function hasPushTransportSupport() {
+  return (
+    typeof window !== 'undefined' &&
+    window.isSecureContext &&
+    'PushManager' in window &&
+    typeof navigator !== 'undefined' &&
+    'serviceWorker' in navigator
+  );
+}
+
 function getSupportSnapshot() {
   return {
     hasNotificationApi:
@@ -185,11 +195,24 @@ export async function syncPushNotifications(
     ...getSupportSnapshot(),
   });
 
-  if (!isBrowserPushSupported()) {
-    debugPush('Push sync result: unsupported.', getSupportSnapshot());
+  const hasNotificationApi =
+    typeof window !== 'undefined' && 'Notification' in window;
+  if (!hasNotificationApi) {
+    debugPush('Push sync result: unsupported because Notification API is unavailable.');
     return {
       status: 'unsupported',
       permission: 'unsupported',
+    };
+  }
+
+  if (!hasPushTransportSupport()) {
+    debugPush(
+      'Push sync result: unsupported because the current origin or browser cannot use service workers and PushManager.',
+      getSupportSnapshot(),
+    );
+    return {
+      status: 'unsupported',
+      permission: Notification.permission,
     };
   }
 
@@ -201,28 +224,11 @@ export async function syncPushNotifications(
     };
   }
 
-  const registration = await registerAppServiceWorker();
-  if (!registration) {
-    debugPush('Push sync result: unsupported because service worker registration returned null.');
-    return {
-      status: 'unsupported',
-      permission: 'unsupported',
-    };
-  }
-
-  if (Notification.permission === 'granted' && hasSessionReadyFlag(userId)) {
-    debugPush('Push sync result: already enabled for this session.', {
-      userId,
-    });
-    return {
-      status: 'enabled',
-      permission: 'granted',
-    };
-  }
-
   let permission = Notification.permission;
   if (permission === 'default' && options?.requestPermission) {
-    debugPush('Requesting notification permission from the browser.');
+    debugPush(
+      'Requesting notification permission from the browser before any async registration work.',
+    );
     permission = await Notification.requestPermission();
     debugPush('Notification permission request completed.', {
       permission,
@@ -243,6 +249,25 @@ export async function syncPushNotifications(
     });
     return {
       status: 'needs-permission',
+      permission,
+    };
+  }
+
+  if (hasSessionReadyFlag(userId)) {
+    debugPush('Push sync result: already enabled for this session.', {
+      userId,
+    });
+    return {
+      status: 'enabled',
+      permission,
+    };
+  }
+
+  const registration = await registerAppServiceWorker();
+  if (!registration) {
+    debugPush('Push sync result: unsupported because service worker registration returned null.');
+    return {
+      status: 'unsupported',
       permission,
     };
   }

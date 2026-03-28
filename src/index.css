@@ -565,6 +565,16 @@ p {
   object-fit: contain;
 }
 
+.home-topbar-logo-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  line-height: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .app-topbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(240px, auto);

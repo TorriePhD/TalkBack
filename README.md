@@ -80,6 +80,7 @@ npm run build
 - `npm run dev` already binds to `0.0.0.0:5173`, so the app is reachable from other devices on the same LAN.
 - Push subscription setup runs once per signed-in user session, stores the subscription in Supabase, and sends a single clip notification through an Edge Function after a round is created.
 - Set `VITE_PUSH_VAPID_PUBLIC_KEY` in `.env.local` to the public VAPID key generated for the push backend.
+- For GitHub Pages builds, also add `VITE_PUSH_VAPID_PUBLIC_KEY` as a repository Actions variable in `Settings > Secrets and variables > Actions > Variables`, then redeploy. This is a public key, so it belongs in Variables, not Secrets.
 - For GitHub Pages, set `BASE_PATH` or `VITE_BASE_PATH` to your repository path such as `/TalkBack/` when you need a manual override. The Vite config also auto-detects the repository name during GitHub Actions builds.
 - The manifest uses relative URLs so the install entry point works both at `/` and at a GitHub Pages repository subpath.
 

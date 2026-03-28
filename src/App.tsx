@@ -667,6 +667,21 @@ function App() {
           </div>
         </div>
       ) : null}
+      {currentUserId && pushStatus === 'disabled' ? (
+        <div className="info-banner notification-banner">
+          <div>
+            <strong>Push is not configured for this deployment</strong>
+            <p>
+              This build is missing the public VAPID key, so the app cannot request notification
+              permission or create a push subscription.
+            </p>
+            <p>
+              For GitHub Pages, add <code>VITE_PUSH_VAPID_PUBLIC_KEY</code> as a repository Actions
+              variable, then redeploy.
+            </p>
+          </div>
+        </div>
+      ) : null}
       {currentUserId && pushStatus === 'needs-permission' ? (
         <div className="info-banner notification-banner">
           <div>

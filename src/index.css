@@ -6,11 +6,6 @@
   line-height: 1.45;
   font-weight: 400;
   color: #13212c;
-  background:
-    radial-gradient(circle at 10% 12%, rgba(255, 171, 120, 0.3), transparent 22%),
-    radial-gradient(circle at 84% 4%, rgba(88, 131, 255, 0.22), transparent 24%),
-    radial-gradient(circle at 72% 82%, rgba(25, 170, 140, 0.16), transparent 22%),
-    linear-gradient(180deg, #fff8f1 0%, #fdf4f0 42%, #eef5ff 100%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -50,8 +45,21 @@ body,
 }
 
 body {
+  position: relative;
+  isolation: isolate;
+  margin: 0;
   min-height: 100vh;
-  background: inherit;
+  background: linear-gradient(
+    135deg,
+    #00e5ff 0%,
+    #0099ff 20%,
+    #3b5bff 40%,
+    #7a00ff 60%,
+    #ff00aa 80%,
+    #ff4d4d 100%
+  );
+  background-size: 300% 300%;
+  animation: gradientShift 12s ease infinite;
   color: var(--ink);
   font-family: var(--font-body);
   overflow-x: hidden;
@@ -63,10 +71,61 @@ body::before {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.54), transparent 12%),
-    radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.4), transparent 11%),
-    radial-gradient(circle at 70% 76%, rgba(255, 255, 255, 0.26), transparent 16%);
-  opacity: 0.88;
+    radial-gradient(circle at 20% 30%, rgba(0, 255, 255, 0.6), transparent 40%),
+    radial-gradient(circle at 80% 60%, rgba(0, 120, 255, 0.5), transparent 45%);
+  filter: blur(120px);
+  animation: float1 10s ease-in-out infinite alternate;
+  transform: translate3d(0, 0, 0);
+  z-index: -2;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 70% 20%, rgba(200, 0, 255, 0.6), transparent 40%),
+    radial-gradient(circle at 30% 80%, rgba(255, 0, 120, 0.5), transparent 50%);
+  filter: blur(140px);
+  animation: float2 14s ease-in-out infinite alternate;
+  transform: translate3d(0, 0, 0);
+  z-index: -1;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes float1 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(-80px, 60px, 0) scale(1.2);
+  }
+}
+
+@keyframes float2 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(70px, -80px, 0) scale(1.25);
+  }
 }
 
 button,

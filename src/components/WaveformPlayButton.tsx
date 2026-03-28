@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { emitAudioEnergy } from '../audio/audioEnergyBus';
 
 const FULL_CIRCLE = Math.PI * 2;
 const TARGET_FRAME_MS = 1000 / 48;
@@ -151,12 +152,14 @@ export function WaveformPlayButton({
     const handlePause = () => {
       motionTargetRef.current = 0;
       setIsPlaying(false);
+      emitAudioEnergy(0, mode);
       onPause?.();
     };
 
     const handleEnded = () => {
       motionTargetRef.current = 0;
       setIsPlaying(false);
+      emitAudioEnergy(0, mode);
       onEnd?.();
     };
 
@@ -280,6 +283,14 @@ export function WaveformPlayButton({
           analyser.getByteFrequencyData(frequencyData);
           const amplitude = (mode === 'record' ? 42 : 24) * intensity * progress;
           const minRadius = strokeWidth * 0.9;
+          let totalEnergy = 0;
+          let sampledBins = 0;
+
+          for (let frequencyIndex = 0; frequencyIndex < frequencyData.length; frequencyIndex += 2) {
+            totalEnergy += frequencyData[frequencyIndex];
+            sampledBins += 1;
+          }
+          emitAudioEnergy(sampledBins > 0 ? totalEnergy / sampledBins / 255 : 0, mode);
 
           for (let i = 0; i < segmentCount; i += 1) {
             const frequencyIndex = Math.floor((i / segmentCount) * frequencyData.length);
@@ -301,6 +312,7 @@ export function WaveformPlayButton({
             radii[i] = clamp(baseRadius + offset, minRadius, safeOuterRadius);
           }
         } else {
+          emitAudioEnergy(0, mode);
           for (let i = 0; i < segmentCount; i += 1) {
             const subtlePulse = prefersReducedMotion
               ? 0.85 + 0.15 * Math.sin(now * 0.001 + i * 0.11)

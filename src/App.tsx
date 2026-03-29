@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import homeLogo from './assets/backtalk-logo.png';
 import { StarRating } from './components/StarRating';
 import { WaveformLoader } from './components/WaveformLoader';
@@ -226,6 +226,7 @@ function App() {
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const initialLoadRequestIdRef = useRef(0);
+  const dataRefreshInFlightRef = useRef(false);
   const showSecureContextWarning =
     typeof window !== 'undefined' && !window.isSecureContext;
 
@@ -325,50 +326,67 @@ function App() {
     };
   }, [currentUserId]);
 
-  const refreshAppData = async (options?: {
-    initialLoadRequestId?: number;
-    resolveInitialLoad?: boolean;
-  }) => {
-    if (!currentUserId) {
-      setProfile(null);
-      setFriends([]);
-      setRequests([]);
-      setRounds([]);
-      setSelectedFriendId(null);
-      setIsComposingNextRound(false);
-      return;
-    }
-
-    setIsLoadingData(true);
-    setLoadError(null);
-
-    try {
-      const [nextProfile, nextFriends, nextRequests, nextRounds] = await Promise.all([
-        getMyProfile(),
-        listFriends(currentUserId),
-        listFriendRequests(currentUserId),
-        listRounds(),
-      ]);
-
-      setProfile(nextProfile);
-      setFriends(nextFriends);
-      setRequests(nextRequests);
-      setRounds(nextRounds);
-    } catch (error) {
-      setLoadError(
-        error instanceof Error ? error.message : 'Unable to load data from Supabase.',
-      );
-    } finally {
-      setIsLoadingData(false);
-
-      if (
-        options?.resolveInitialLoad &&
-        options.initialLoadRequestId === initialLoadRequestIdRef.current
-      ) {
-        setHasLoadedInitialData(true);
+  const refreshAppData = useCallback(
+    async (options?: {
+      initialLoadRequestId?: number;
+      resolveInitialLoad?: boolean;
+      silent?: boolean;
+      skipIfInFlight?: boolean;
+    }) => {
+      if (!currentUserId) {
+        setProfile(null);
+        setFriends([]);
+        setRequests([]);
+        setRounds([]);
+        setSelectedFriendId(null);
+        setIsComposingNextRound(false);
+        return;
       }
-    }
-  };
+
+      if (options?.skipIfInFlight && dataRefreshInFlightRef.current) {
+        return;
+      }
+
+      dataRefreshInFlightRef.current = true;
+
+      if (!options?.silent) {
+        setIsLoadingData(true);
+      }
+      setLoadError(null);
+
+      try {
+        const [nextProfile, nextFriends, nextRequests, nextRounds] = await Promise.all([
+          getMyProfile(),
+          listFriends(currentUserId),
+          listFriendRequests(currentUserId),
+          listRounds(),
+        ]);
+
+        setProfile(nextProfile);
+        setFriends(nextFriends);
+        setRequests(nextRequests);
+        setRounds(nextRounds);
+      } catch (error) {
+        setLoadError(
+          error instanceof Error ? error.message : 'Unable to load data from Supabase.',
+        );
+      } finally {
+        dataRefreshInFlightRef.current = false;
+
+        if (!options?.silent) {
+          setIsLoadingData(false);
+        }
+
+        if (
+          options?.resolveInitialLoad &&
+          options.initialLoadRequestId === initialLoadRequestIdRef.current
+        ) {
+          setHasLoadedInitialData(true);
+        }
+      }
+    },
+    [currentUserId],
+  );
 
   useEffect(() => {
     if (!currentUserId) {
@@ -393,7 +411,21 @@ function App() {
     setIsComposingNextRound(false);
     setHasLoadedInitialData(false);
     void refreshAppData({ initialLoadRequestId, resolveInitialLoad: true });
-  }, [currentUserId]);
+  }, [currentUserId, refreshAppData]);
+
+  useEffect(() => {
+    if (!currentUserId || view !== 'home') {
+      return;
+    }
+
+    const pollInterval = window.setInterval(() => {
+      void refreshAppData({ silent: true, skipIfInFlight: true });
+    }, 10_000);
+
+    return () => {
+      window.clearInterval(pollInterval);
+    };
+  }, [currentUserId, refreshAppData, view]);
 
   useEffect(() => {
     if (!selectedFriendId) {

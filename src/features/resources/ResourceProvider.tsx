@@ -140,7 +140,14 @@ export function CoinDisplay() {
       data-coin-display="true"
       aria-label={`BB Coins: ${displayedCoins.toLocaleString()}`}
     >
-      <img alt="" aria-hidden="true" className="coin-icon" src="/bbcoin.png" />
+      <span className="coin-icon-anchor" data-coin-display-target="true">
+        <img
+          alt=""
+          aria-hidden="true"
+          className="coin-icon"
+          src="/bbcoin.png"
+        />
+      </span>
       <strong className={`coin-display-value${isLoadingCoins ? ' is-loading' : ''}`}>
         {displayedCoins.toLocaleString()}
       </strong>

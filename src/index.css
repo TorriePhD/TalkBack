@@ -674,6 +674,7 @@ p {
 }
 
 .coin-display {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -693,10 +694,20 @@ p {
   white-space: nowrap;
 }
 
-.coin-icon {
+.coin-icon-anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 22px;
   height: 22px;
   flex: 0 0 auto;
+}
+
+.coin-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
   filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.45)) drop-shadow(0 0 12px rgba(255, 0, 170, 0.22));
 }
 
@@ -1218,26 +1229,19 @@ p {
   font-size: 0.92rem;
 }
 
-.reward-sequence-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
+.reward-sequence-inline {
+  position: relative;
   display: grid;
-  place-items: center;
-  padding: 24px 18px;
-  background:
-    radial-gradient(circle at top right, rgba(255, 201, 94, 0.16), transparent 30%),
-    radial-gradient(circle at bottom left, rgba(77, 121, 255, 0.18), transparent 36%),
-    rgba(9, 17, 29, 0.46);
-  backdrop-filter: blur(8px);
+  gap: 0;
+  isolation: isolate;
 }
 
-.reward-sequence-overlay.is-shaking {
+.reward-sequence-inline.is-shaking {
   animation: reward-screen-shake 220ms ease-out;
 }
 
 .reward-sequence-card {
-  width: min(520px, calc(100vw - 36px));
+  width: 100%;
   display: grid;
   gap: 18px;
   padding: 24px 22px;
@@ -1249,7 +1253,7 @@ p {
     radial-gradient(circle at bottom right, rgba(0, 229, 255, 0.12), transparent 34%);
   color: #f6fbff;
   box-shadow:
-    0 28px 70px rgba(6, 11, 20, 0.4),
+    0 22px 48px rgba(6, 11, 20, 0.26),
     0 0 0 1px rgba(255, 255, 255, 0.04) inset;
 }
 
@@ -1335,24 +1339,42 @@ p {
   color: rgba(244, 234, 204, 0.82);
 }
 
-.reward-sequence-actions {
-  display: flex;
-  justify-content: flex-end;
+.reward-sequence-total {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.reward-sequence-continue {
-  min-width: 164px;
+.reward-sequence-total-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(244, 234, 204, 0.68);
+}
+
+.reward-sequence-total-value {
+  font-size: clamp(1.2rem, 4vw, 1.7rem);
+  font-weight: 900;
+  color: #fff7ca;
+}
+
+.reward-sequence-total-gain {
+  color: rgba(175, 246, 255, 0.9);
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .reward-sequence-target {
   position: fixed;
   inset: 0 auto auto 0;
-  width: 60px;
-  height: 60px;
   border-radius: 999px;
   border: 2px solid rgba(255, 217, 107, 0.9);
   box-shadow:
-    0 0 0 10px rgba(255, 217, 107, 0.12),
+    0 0 0 8px rgba(255, 217, 107, 0.12),
     0 0 22px rgba(255, 217, 107, 0.35);
   animation: reward-target-pulse 420ms ease-out infinite alternate;
   pointer-events: none;
@@ -1542,6 +1564,17 @@ p {
   display: grid;
   gap: 16px;
   align-content: start;
+}
+
+.reward-stage-step {
+  min-height: clamp(520px, 72dvh, 860px);
+  align-content: start;
+}
+
+.reward-result-box {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 255, 0.9)),
+    radial-gradient(circle at top right, rgba(77, 121, 255, 0.1), transparent 40%);
 }
 
 .round-screen-summary {
@@ -2110,6 +2143,11 @@ p {
     padding: 9px 12px 9px 10px;
   }
 
+  .coin-icon-anchor {
+    width: 20px;
+    height: 20px;
+  }
+
   .coin-icon {
     width: 20px;
     height: 20px;
@@ -2132,14 +2170,6 @@ p {
 
   .reward-sequence-formula {
     gap: 6px 8px;
-  }
-
-  .reward-sequence-actions {
-    justify-content: stretch;
-  }
-
-  .reward-sequence-continue {
-    width: 100%;
   }
 
   /* Keep stacked form fields compact when rows collapse to a column on mobile. */

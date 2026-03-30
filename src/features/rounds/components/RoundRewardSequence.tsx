@@ -7,7 +7,8 @@ interface RoundRewardSequenceProps {
   baseCoins: number;
   reward: RoundReward;
   onDisplayedCoinsChange: (amount: number) => void;
-  onSequenceComplete: () => void | Promise<void>;
+  onAnimationComplete?: () => void;
+  startCompleted?: boolean;
 }
 
 interface Point {
@@ -35,6 +36,7 @@ const STAR_DURATION_MS = 720;
 const DIFFICULTY_DURATION_MS = 320;
 const FORMULA_DURATION_MS = 260;
 const BURST_DURATION_MS = 560;
+const TARGET_MARKER_SIZE_PX = 44;
 const TOTAL_DURATION_MS =
   STAR_DURATION_MS + DIFFICULTY_DURATION_MS + FORMULA_DURATION_MS + BURST_DURATION_MS;
 
@@ -78,6 +80,17 @@ function getCenterPoint(element: HTMLElement | null): Point | null {
   };
 }
 
+function getCoinDisplayTargetPoint() {
+  const exactTarget = document.querySelector<HTMLElement>('[data-coin-display-target="true"]');
+
+  if (exactTarget) {
+    return getCenterPoint(exactTarget);
+  }
+
+  const fallbackTarget = document.querySelector<HTMLElement>('[data-coin-display="true"]');
+  return getCenterPoint(fallbackTarget);
+}
+
 function pointsEqual(left: Point | null, right: Point | null) {
   if (!left || !right) {
     return left === right;
@@ -105,14 +118,15 @@ export function RoundRewardSequence({
   baseCoins,
   reward,
   onDisplayedCoinsChange,
-  onSequenceComplete,
+  onAnimationComplete,
+  startCompleted = false,
 }: RoundRewardSequenceProps) {
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(startCompleted ? TOTAL_DURATION_MS : 0);
   const [burstOrigin, setBurstOrigin] = useState<Point | null>(null);
   const [targetPoint, setTargetPoint] = useState<Point | null>(null);
-  const [isContinuing, setIsContinuing] = useState(false);
   const sequenceCardRef = useRef<HTMLDivElement | null>(null);
   const formulaRef = useRef<HTMLDivElement | null>(null);
+  const hasCompletedAnimationRef = useRef(startCompleted);
 
   const starsProgress = clamp(elapsedMs / STAR_DURATION_MS);
   const difficultyProgress = clamp((elapsedMs - STAR_DURATION_MS) / DIFFICULTY_DURATION_MS);
@@ -130,12 +144,12 @@ export function RoundRewardSequence({
     isSequenceFinished
       ? 'Reward Ready'
       : burstProgress > 0
-      ? 'Banking BB Coins'
-      : formulaProgress > 0
-        ? 'Calculating Reward'
-        : difficultyProgress > 0
-          ? 'Locking Difficulty'
-          : 'Counting Stars';
+        ? 'Banking BB Coins'
+        : formulaProgress > 0
+          ? 'Calculating Reward'
+          : difficultyProgress > 0
+            ? 'Locking Difficulty'
+            : 'Counting Stars';
   const starCounterLabel =
     starsProgress < 1 && reward.stars > 0
       ? displayedStarValue.toFixed(1)
@@ -148,8 +162,15 @@ export function RoundRewardSequence({
     reward.rewardAmount === 0
       ? baseCoins
       : baseCoins + Math.round(reward.rewardAmount * easeOutCubic(burstProgress));
+  const displayedCoinGain = Math.max(0, displayedCoinTotal - baseCoins);
 
   useEffect(() => {
+    if (startCompleted) {
+      setElapsedMs(TOTAL_DURATION_MS);
+      hasCompletedAnimationRef.current = true;
+      return;
+    }
+
     let animationFrameId = 0;
     let startTimeMs = 0;
 
@@ -171,11 +192,20 @@ export function RoundRewardSequence({
     return () => {
       window.cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [startCompleted]);
 
   useEffect(() => {
     onDisplayedCoinsChange(displayedCoinTotal);
   }, [displayedCoinTotal, onDisplayedCoinsChange]);
+
+  useEffect(() => {
+    if (elapsedMs < TOTAL_DURATION_MS || hasCompletedAnimationRef.current) {
+      return;
+    }
+
+    hasCompletedAnimationRef.current = true;
+    onAnimationComplete?.();
+  }, [elapsedMs, onAnimationComplete]);
 
   useEffect(() => {
     if (burstProgress === 0 && burstOrigin && targetPoint) {
@@ -188,8 +218,7 @@ export function RoundRewardSequence({
 
     const originElement = formulaRef.current ?? sequenceCardRef.current;
     const nextOrigin = getCenterPoint(originElement);
-    const coinDisplayElement = document.querySelector<HTMLElement>('[data-coin-display="true"]');
-    const nextTarget = getCenterPoint(coinDisplayElement);
+    const nextTarget = getCoinDisplayTargetPoint();
 
     if (nextOrigin && !pointsEqual(nextOrigin, burstOrigin)) {
       setBurstOrigin(nextOrigin);
@@ -200,20 +229,6 @@ export function RoundRewardSequence({
     }
   }, [burstOrigin, burstProgress, targetPoint]);
 
-  const handleContinue = async () => {
-    if (isContinuing) {
-      return;
-    }
-
-    setIsContinuing(true);
-
-    try {
-      await onSequenceComplete();
-    } finally {
-      setIsContinuing(false);
-    }
-  };
-
   const particleStyles = useMemo<ParticleRender[]>(() => {
     if (!burstOrigin || !targetPoint || burstProgress === 0) {
       return [];
@@ -222,46 +237,48 @@ export function RoundRewardSequence({
     const burstElapsedMs = burstProgress * BURST_DURATION_MS;
 
     return particles.reduce<ParticleRender[]>((result, particle) => {
-        const progress = clamp((burstElapsedMs - particle.delay) / particle.duration);
+      const progress = clamp((burstElapsedMs - particle.delay) / particle.duration);
 
-        if (progress <= 0) {
-          return result;
-        }
-
-        const easedProgress = easeOutCubic(progress);
-        const endX = targetPoint.x + particle.endOffsetX;
-        const endY = targetPoint.y + particle.endOffsetY;
-        const controlX = (burstOrigin.x + endX) / 2 + particle.endOffsetX * 0.4;
-        const controlY = Math.min(burstOrigin.y, endY) - particle.lift;
-        const x = quadraticBezier(burstOrigin.x, controlX, endX, easedProgress);
-        const y = quadraticBezier(burstOrigin.y, controlY, endY, easedProgress);
-        const opacity = progress > 0.84 ? 1 - (progress - 0.84) / 0.16 : 1;
-        const scale = 0.82 + (1 - progress) * 0.28;
-
-        result.push({
-          id: particle.id,
-          style: {
-            width: `${particle.size}px`,
-            height: `${particle.size}px`,
-            opacity,
-            transform: `translate(${x - particle.size / 2}px, ${y - particle.size / 2}px) scale(${scale}) rotate(${particle.spin * easedProgress}deg)`,
-          },
-        });
-
+      if (progress <= 0) {
         return result;
-      }, []);
+      }
+
+      const easedProgress = easeOutCubic(progress);
+      const endX = targetPoint.x + particle.endOffsetX;
+      const endY = targetPoint.y + particle.endOffsetY;
+      const controlX = (burstOrigin.x + endX) / 2 + particle.endOffsetX * 0.4;
+      const controlY = Math.min(burstOrigin.y, endY) - particle.lift;
+      const x = quadraticBezier(burstOrigin.x, controlX, endX, easedProgress);
+      const y = quadraticBezier(burstOrigin.y, controlY, endY, easedProgress);
+      const opacity = progress > 0.84 ? 1 - (progress - 0.84) / 0.16 : 1;
+      const scale = 0.82 + (1 - progress) * 0.28;
+
+      result.push({
+        id: particle.id,
+        style: {
+          width: `${particle.size}px`,
+          height: `${particle.size}px`,
+          opacity,
+          transform: `translate(${x - particle.size / 2}px, ${y - particle.size / 2}px) scale(${scale}) rotate(${particle.spin * easedProgress}deg)`,
+        },
+      });
+
+      return result;
+    }, []);
   }, [burstOrigin, burstProgress, particles, targetPoint]);
 
   return (
     <div
-      className={`reward-sequence-overlay${difficultyProgress > 0.68 && difficultyProgress < 0.98 ? ' is-shaking' : ''}`}
+      className={`reward-sequence-inline${difficultyProgress > 0.68 && difficultyProgress < 0.98 ? ' is-shaking' : ''}`}
       role="presentation"
     >
-      {targetPoint ? (
+      {!isSequenceFinished && targetPoint ? (
         <div
           className="reward-sequence-target"
           style={{
-            transform: `translate(${targetPoint.x - 30}px, ${targetPoint.y - 30}px) scale(${targetPulseScale})`,
+            width: `${TARGET_MARKER_SIZE_PX}px`,
+            height: `${TARGET_MARKER_SIZE_PX}px`,
+            transform: `translate(${targetPoint.x - TARGET_MARKER_SIZE_PX / 2}px, ${targetPoint.y - TARGET_MARKER_SIZE_PX / 2}px) scale(${targetPulseScale})`,
           }}
         />
       ) : null}
@@ -299,48 +316,47 @@ export function RoundRewardSequence({
           }}
         >
           <span>{reward.stars} stars</span>
-          <span aria-hidden="true">×</span>
+          <span aria-hidden="true">x</span>
           <span>{getDifficultyLabel(reward.difficulty)} x{difficultyMultiplierValue}</span>
           <span aria-hidden="true">=</span>
           <strong>{reward.rewardAmount.toLocaleString()} BB Coins</strong>
         </div>
 
+        <div className="reward-sequence-total">
+          <span className="reward-sequence-total-label">Wallet total</span>
+          <strong className="reward-sequence-total-value">
+            {displayedCoinTotal.toLocaleString()} BB Coins
+          </strong>
+          {displayedCoinGain > 0 ? (
+            <span className="reward-sequence-total-gain">
+              +{displayedCoinGain.toLocaleString()} in motion
+            </span>
+          ) : null}
+        </div>
+
         <p className="reward-sequence-caption">
           {isSequenceFinished
             ? reward.rewardAmount > 0
-              ? 'Your payout is ready. Continue when you want to bank it.'
-              : 'No BB Coins were earned this round. Continue when you are ready.'
+              ? 'Your payout is ready. Use the action below the round to continue.'
+              : 'No BB Coins were earned this round. Use the action below the round to continue.'
             : reward.rewardAmount > 0
               ? 'Watch the payout lock in, then continue to bank it.'
               : 'This round banks no BB Coins, but the result still gets locked for your profile.'}
         </p>
-
-        {isSequenceFinished ? (
-          <div className="reward-sequence-actions">
-            <button
-              className="button primary reward-sequence-continue"
-              disabled={isContinuing}
-              onClick={() => {
-                void handleContinue();
-              }}
-              type="button"
-            >
-              {isContinuing ? 'Continuing...' : 'Continue'}
-            </button>
-          </div>
-        ) : null}
       </div>
 
-      {particleStyles.map((particle) => (
-        <img
-          alt=""
-          aria-hidden="true"
-          className="reward-coin-particle"
-          key={particle.id}
-          src="/bbcoin.png"
-          style={particle.style}
-        />
-      ))}
+      {!isSequenceFinished
+        ? particleStyles.map((particle) => (
+            <img
+              alt=""
+              aria-hidden="true"
+              className="reward-coin-particle"
+              key={particle.id}
+              src="/bbcoin.png"
+              style={particle.style}
+            />
+          ))
+        : null}
     </div>
   );
 }

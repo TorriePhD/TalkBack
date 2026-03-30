@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { StarRating } from '../../../components/StarRating';
 import { difficultyMultiplier } from '../../../lib/rounds';
 import type { RoundReward } from '../types';
 
@@ -52,11 +53,6 @@ function easeOutCubic(value: number) {
 function easeOutBack(value: number, overshoot = 1.24) {
   const adjustedValue = clamp(value) - 1;
   return adjustedValue * adjustedValue * ((overshoot + 1) * adjustedValue + overshoot) + 1;
-}
-
-function easeInBack(value: number, overshoot = 1.5) {
-  const nextValue = clamp(value);
-  return nextValue * nextValue * ((overshoot + 1) * nextValue - overshoot);
 }
 
 function quadraticBezier(start: number, control: number, end: number, progress: number) {
@@ -131,7 +127,7 @@ export function RoundRewardSequence({
   const [burstOrigin, setBurstOrigin] = useState<Point | null>(null);
   const [targetPoint, setTargetPoint] = useState<Point | null>(null);
   const sequenceCardRef = useRef<HTMLDivElement | null>(null);
-  const rewardCoinsRef = useRef<HTMLDivElement | null>(null);
+  const formulaRef = useRef<HTMLDivElement | null>(null);
   const hasCompletedAnimationRef = useRef(startCompleted);
 
   const starsProgress = clamp(elapsedMs / STAR_DURATION_MS);
@@ -144,7 +140,7 @@ export function RoundRewardSequence({
       BURST_DURATION_MS,
   );
   const difficultyMultiplierValue = difficultyMultiplier[reward.difficulty];
-  const starFillProgress = easeOutCubic(starsProgress);
+  const displayedStarValue = reward.stars * easeOutBack(starsProgress, 1.18);
   const isSequenceFinished = elapsedMs >= TOTAL_DURATION_MS;
   const stageLabel =
     isSequenceFinished
@@ -156,15 +152,14 @@ export function RoundRewardSequence({
           : difficultyProgress > 0
             ? 'Locking Difficulty'
             : 'Counting Stars';
+  const starCounterLabel =
+    starsProgress < 1 && reward.stars > 0
+      ? displayedStarValue.toFixed(1)
+      : `${reward.stars}`;
   const difficultyDrop = 1 - easeOutBack(difficultyProgress, 1.34);
+  const formulaReveal = easeOutCubic(formulaProgress);
   const targetPulseScale = 0.94 + burstProgress * 0.32;
   const particles = useMemo(() => createParticleSpecs(reward.rewardAmount), [reward.rewardAmount]);
-  const starBaseCoins = reward.stars;
-  const difficultyRamp = 1 + (difficultyMultiplierValue - 1) * easeOutBack(difficultyProgress, 1.28);
-  const displayedRewardCoins =
-    reward.rewardAmount === 0
-      ? 0
-      : Math.min(reward.rewardAmount, Math.round(starBaseCoins * starFillProgress * difficultyRamp));
   const displayedCoinTotal =
     reward.rewardAmount === 0
       ? baseCoins
@@ -222,7 +217,7 @@ export function RoundRewardSequence({
       return;
     }
 
-    const originElement = rewardCoinsRef.current ?? sequenceCardRef.current;
+    const originElement = formulaRef.current ?? sequenceCardRef.current;
     const nextOrigin = getCenterPoint(originElement);
     const nextTarget = getCoinDisplayTargetPoint();
 
@@ -273,11 +268,6 @@ export function RoundRewardSequence({
     }, []);
   }, [burstOrigin, burstProgress, particles, targetPoint]);
 
-  const starSlamProgress = Array.from({ length: 3 }, (_, index) => {
-    const stagger = index / 3;
-    return clamp((starsProgress - stagger) * 3.2);
-  });
-
   return (
     <div
       className={`reward-sequence-inline${difficultyProgress > 0.68 && difficultyProgress < 0.98 ? ' is-shaking' : ''}`}
@@ -299,30 +289,13 @@ export function RoundRewardSequence({
         <div className="reward-sequence-stage">{stageLabel}</div>
 
         <div className="reward-sequence-stars">
-          <div className="reward-sequence-slam-stars" aria-label={`${reward.stars} stars`} role="img">
-            {Array.from({ length: 3 }, (_, index) => {
-              const fillAmount = clamp(starFillProgress - index, 0, 1);
-              const slam = starSlamProgress[index];
-              const initialDrop = 120 + index * 70;
-              const dropOffset = (1 - easeOutBack(slam, 1.14 + index * 0.22)) * initialDrop;
-              const impact = easeInBack(clamp((slam - 0.7) / 0.3), 1.3 + index * 0.24);
-              const scale = 0.55 + slam * 0.75 + impact * (0.14 + index * 0.05);
-
-              return (
-                <span
-                  aria-hidden="true"
-                  className={`reward-sequence-slam-star${fillAmount > 0 ? ' is-filled' : ''}`}
-                  key={`slam-star-${index}`}
-                  style={{
-                    opacity: fillAmount > 0 ? 1 : 0.35,
-                    transform: `translate3d(0, ${dropOffset}px, 0) scale(${scale})`,
-                  }}
-                >
-                  ★
-                </span>
-              );
-            })}
+          <div>
+            <div className="reward-sequence-value">{starCounterLabel}</div>
+            <div className="reward-sequence-subtitle">
+              {reward.stars === 1 ? 'star earned' : 'stars earned'}
+            </div>
           </div>
+          <StarRating large label={`${reward.stars} stars`} value={displayedStarValue} />
         </div>
 
         <div
@@ -335,9 +308,19 @@ export function RoundRewardSequence({
           {getDifficultyLabel(reward.difficulty)}
         </div>
 
-        <div className="reward-sequence-coins" ref={rewardCoinsRef}>
-          <img alt="" aria-hidden="true" src={`${import.meta.env.BASE_URL}bbcoin.png`} />
-          <strong>{displayedRewardCoins.toLocaleString()}</strong>
+        <div
+          className={`reward-sequence-formula${formulaProgress > 0 ? ' is-visible' : ''}`}
+          ref={formulaRef}
+          style={{
+            opacity: formulaReveal,
+            transform: `translate3d(0, ${(1 - formulaReveal) * 20}px, 0) scale(${0.96 + formulaReveal * 0.04})`,
+          }}
+        >
+          <span>{reward.stars} stars</span>
+          <span aria-hidden="true">x</span>
+          <span>{getDifficultyLabel(reward.difficulty)} x{difficultyMultiplierValue}</span>
+          <span aria-hidden="true">=</span>
+          <strong>{reward.rewardAmount.toLocaleString()} BB Coins</strong>
         </div>
 
         <p className="reward-sequence-caption">

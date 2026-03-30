@@ -5,6 +5,7 @@ import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { WaveformLoader } from '../../../components/WaveformLoader';
 import { createRoundRecord } from '../../../lib/rounds';
+import { difficultyMultiplier } from '../../../lib/rounds';
 import type { Friend } from '../../social/types';
 import type { Round } from '../types';
 import {
@@ -26,6 +27,14 @@ interface CreateRoundPanelProps {
 }
 
 type CreateStage = 'phrase' | 'record';
+
+function getDifficultyEffectLabel(difficulty: WordOption['displayDifficulty']) {
+  if (difficulty === 'easy') {
+    return null;
+  }
+
+  return `${difficultyMultiplier[difficulty]}x`;
+}
 
 export function CreateRoundPanel({
   currentUserId,
@@ -273,6 +282,7 @@ export function CreateRoundPanel({
             >
               {availableOptions.map((option) => {
                 const isSelected = selectedOption?.text === option.text;
+                const difficultyEffectLabel = getDifficultyEffectLabel(option.displayDifficulty);
 
                 return (
                   <button
@@ -284,8 +294,26 @@ export function CreateRoundPanel({
                     type="button"
                   >
                     <span className="pill-row" style={{ justifyContent: 'space-between', width: '100%' }}>
-                      <span className={`badge ${option.displayDifficulty}`}>{option.displayDifficulty}</span>
-                      <span>{option.syllables} syllables</span>
+                      <span className={`badge ${option.displayDifficulty}`}>
+                        {option.displayDifficulty}
+                        {difficultyEffectLabel ? (
+                          <span
+                            style={{
+                              alignItems: 'center',
+                              display: 'inline-flex',
+                              gap: '0.15rem',
+                              marginLeft: '0.35rem',
+                            }}
+                          >
+                            {difficultyEffectLabel}
+                            <img
+                              alt="BB coin"
+                              src={`${import.meta.env.BASE_URL}bbcoin.png`}
+                              style={{ height: '0.95em', width: '0.95em' }}
+                            />
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
                     <span style={{ display: 'block', marginTop: '0.5rem', textAlign: 'left' }}>
                       {option.text}

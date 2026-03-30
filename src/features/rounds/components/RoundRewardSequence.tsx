@@ -352,7 +352,7 @@ export function RoundRewardSequence({
               aria-hidden="true"
               className="reward-coin-particle"
               key={particle.id}
-              src="/bbcoin.png"
+              src={`${import.meta.env.BASE_URL}bbcoin.png`}
               style={particle.style}
             />
           ))

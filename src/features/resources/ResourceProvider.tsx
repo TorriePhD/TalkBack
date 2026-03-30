@@ -145,7 +145,7 @@ export function CoinDisplay() {
           alt=""
           aria-hidden="true"
           className="coin-icon"
-          src="/bbcoin.png"
+          src={`${import.meta.env.BASE_URL}bbcoin.png`}
         />
       </span>
       <strong className={`coin-display-value${isLoadingCoins ? ' is-loading' : ''}`}>

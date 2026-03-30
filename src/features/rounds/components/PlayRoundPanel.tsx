@@ -4,6 +4,7 @@ import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import type { PlaybackStartKind } from '../../../components/WaveformPlayButton';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
+import { WaveformLoader } from '../../../components/WaveformLoader';
 import { useCoins } from '../../resources/ResourceProvider';
 import { claimReward, getRoundReward } from '../../../lib/roundRewards';
 import {
@@ -773,7 +774,12 @@ export function PlayRoundPanel({
   );
 
   const rewardStatusCard =
-    round.status === 'complete' && roundReward ? (
+    round.status === 'complete' && isLoadingReward && !roundReward ? (
+      <div className="reward-status-shell reward-status-shell-loading" aria-live="polite" role="status">
+        <WaveformLoader className="reward-status-shell-spinner" size={112} strokeWidth={3.8} />
+        <p>Loading...</p>
+      </div>
+    ) : round.status === 'complete' && roundReward ? (
       <RoundRewardSequence
         baseCoins={rewardBaseCoinsRef.current}
         onAnimationComplete={() => handleRewardAnimationComplete(roundReward)}
@@ -805,24 +811,19 @@ export function PlayRoundPanel({
           ) : (
             <button
               className="button primary"
-              disabled={isArchiving || isRewardBusy || isLoadingReward}
+              disabled={isArchiving || isRewardBusy}
               onClick={() => {
                 void handleArchiveRound();
               }}
               type="button"
             >
-              {isArchiving
-                ? 'Continuing...'
-                : isLoadingReward
-                  ? 'Checking reward...'
-                  : 'Continue thread'}
+              {isArchiving ? 'Continuing...' : 'Continue thread'}
             </button>
           )}
         </div>
       </RoundRewardSequence>
     ) : round.status === 'complete' ? (
       <div className="reward-status-shell">
-        {isLoadingReward ? <p>Checking your reward state...</p> : null}
         {!isLoadingReward && !roundReward ? (
           <>
             <p>Reward data is missing for this round, so no BB Coin payout can be shown here.</p>

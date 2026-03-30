@@ -1796,7 +1796,7 @@ p {
 }
 
 .waveform-icon-play-shape {
-  transform: translateX(2px);
+  transform: scale(1);
   transform-origin: center;
   transition: opacity 190ms ease, transform 220ms ease;
 }
@@ -1822,7 +1822,7 @@ p {
 
 .waveform-play-button.is-playing .waveform-icon-play-shape {
   opacity: 0;
-  transform: scale(0.72) translateX(4px);
+  transform: scale(0.72);
 }
 
 .waveform-play-button.is-playing .waveform-icon-pause-shape {

@@ -473,7 +473,7 @@ export function WaveformPlayButton({
           <polygon
             className="waveform-icon-play-shape"
             fill={`url(#${gradientId})`}
-            points={`${size * 0.45},${size * 0.375} ${size * 0.45},${size * 0.625} ${size * 0.645},${size * 0.5}`}
+            points={`${size * 0.435},${size * 0.375} ${size * 0.435},${size * 0.625} ${size * 0.635},${size * 0.5}`}
           />
 
           <g className="waveform-icon-pause-shape" fill={`url(#${gradientId})`}>
@@ -481,14 +481,14 @@ export function WaveformPlayButton({
               height={size * 0.245}
               rx={size * 0.03}
               width={size * 0.068}
-              x={size * 0.435}
+              x={size * 0.416}
               y={size * 0.377}
             />
             <rect
               height={size * 0.245}
               rx={size * 0.03}
               width={size * 0.068}
-              x={size * 0.53}
+              x={size * 0.516}
               y={size * 0.377}
             />
           </g>

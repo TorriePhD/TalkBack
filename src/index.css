@@ -1280,6 +1280,51 @@ p {
   justify-items: start;
 }
 
+.reward-sequence-star-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.reward-sequence-star {
+  display: inline-flex;
+  transform-origin: 50% 95%;
+  transition: filter 220ms ease;
+  will-change: transform, opacity;
+}
+
+.reward-sequence-star .star-rating-large .star-rating-icon {
+  width: clamp(2.5rem, 8vw, 3.6rem);
+  height: clamp(2.5rem, 8vw, 3.6rem);
+}
+
+.reward-sequence-star.is-earned {
+  filter:
+    drop-shadow(0 8px 16px rgba(255, 186, 58, 0.24))
+    drop-shadow(0 0 14px rgba(255, 236, 158, 0.38));
+}
+
+.reward-sequence-coin-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reward-sequence-coin-icon {
+  width: clamp(2.25rem, 7vw, 3.1rem);
+  height: clamp(2.25rem, 7vw, 3.1rem);
+  filter: drop-shadow(0 8px 12px rgba(255, 186, 58, 0.34));
+}
+
+.reward-sequence-coin-counter strong {
+  font-size: clamp(2rem, 8vw, 3.25rem);
+  line-height: 1;
+  font-weight: 900;
+  color: #fff6b4;
+  text-shadow: 0 0 22px rgba(255, 205, 78, 0.28);
+}
+
 .reward-sequence-value {
   font-size: clamp(2.8rem, 8vw, 4.6rem);
   line-height: 0.92;
@@ -1383,6 +1428,25 @@ p {
 
 .reward-status-shell p {
   margin: 0;
+}
+
+.reward-status-loading {
+  min-height: 46vh;
+  display: grid;
+  gap: 14px;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.reward-status-loading p {
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+}
+
+.reward-status-loading-spinner {
+  color: #f8d76f;
 }
 
 .reward-sequence-total {

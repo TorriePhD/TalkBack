@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { StarRating } from '../../../components/StarRating';
 import { difficultyMultiplier } from '../../../lib/rounds';
 import type { RoundReward } from '../types';
 
@@ -33,8 +32,8 @@ interface ParticleRender {
   style: CSSProperties;
 }
 
-const STAR_DURATION_MS = 720;
-const DIFFICULTY_DURATION_MS = 320;
+const STAR_DURATION_MS = 1240;
+const DIFFICULTY_DURATION_MS = 540;
 const FORMULA_DURATION_MS = 260;
 const BURST_DURATION_MS = 560;
 const TARGET_MARKER_SIZE_PX = 44;
@@ -140,22 +139,24 @@ export function RoundRewardSequence({
       BURST_DURATION_MS,
   );
   const difficultyMultiplierValue = difficultyMultiplier[reward.difficulty];
-  const displayedStarValue = reward.stars * easeOutBack(starsProgress, 1.18);
+  const revealedStars = Math.min(
+    reward.stars,
+    Math.floor(easeOutCubic(starsProgress) * reward.stars + Number.EPSILON),
+  );
+  const starSlamPower = revealedStars === 0 ? 0 : 1 + (revealedStars - 1) * 0.26;
   const isSequenceFinished = elapsedMs >= TOTAL_DURATION_MS;
-  const stageLabel =
-    isSequenceFinished
-      ? 'Reward Ready'
-      : burstProgress > 0
-        ? 'Banking BB Coins'
-        : formulaProgress > 0
-          ? 'Calculating Reward'
-          : difficultyProgress > 0
-            ? 'Locking Difficulty'
-            : 'Counting Stars';
-  const starCounterLabel =
-    starsProgress < 1 && reward.stars > 0
-      ? displayedStarValue.toFixed(1)
-      : `${reward.stars}`;
+  const starCoinCount =
+    reward.stars === 0 ? 0 : Math.round(reward.stars * easeOutCubic(starsProgress));
+  const multipliedCoinCount = Math.round(
+    reward.stars + (reward.rewardAmount - reward.stars) * easeOutBack(difficultyProgress, 1.28),
+  );
+  const displayedEarnedCoins = Math.max(
+    0,
+    Math.min(
+      reward.rewardAmount,
+      difficultyProgress > 0 ? multipliedCoinCount : starCoinCount,
+    ),
+  );
   const difficultyDrop = 1 - easeOutBack(difficultyProgress, 1.34);
   const formulaReveal = easeOutCubic(formulaProgress);
   const targetPulseScale = 0.94 + burstProgress * 0.32;
@@ -285,17 +286,24 @@ export function RoundRewardSequence({
       ) : null}
 
       <div className="reward-sequence-card" ref={sequenceCardRef}>
-        <div className="reward-sequence-label">BB Coin Reward</div>
-        <div className="reward-sequence-stage">{stageLabel}</div>
-
         <div className="reward-sequence-stars">
-          <div>
-            <div className="reward-sequence-value">{starCounterLabel}</div>
-            <div className="reward-sequence-subtitle">
-              {reward.stars === 1 ? 'star earned' : 'stars earned'}
-            </div>
-          </div>
-          <StarRating large label={`${reward.stars} stars`} value={displayedStarValue} />
+          {Array.from({ length: 3 }, (_, index) => {
+            const isLit = index < revealedStars;
+            const slamStyle = {
+              '--slam-power': `${Math.max(1, (index + 1) * 0.3 + starSlamPower).toFixed(2)}`,
+            } as CSSProperties;
+
+            return (
+              <span
+                aria-hidden="true"
+                className={`reward-sequence-star${isLit ? ' is-lit' : ''}`}
+                key={`reward-star-${index}`}
+                style={slamStyle}
+              >
+                ★
+              </span>
+            );
+          })}
         </div>
 
         <div
@@ -305,7 +313,7 @@ export function RoundRewardSequence({
             transform: `translate3d(0, ${-130 * difficultyDrop}px, 0) scale(${0.92 + difficultyProgress * 0.08})`,
           }}
         >
-          {getDifficultyLabel(reward.difficulty)}
+          {getDifficultyLabel(reward.difficulty)} x{difficultyMultiplierValue}
         </div>
 
         <div
@@ -316,22 +324,14 @@ export function RoundRewardSequence({
             transform: `translate3d(0, ${(1 - formulaReveal) * 20}px, 0) scale(${0.96 + formulaReveal * 0.04})`,
           }}
         >
-          <span>{reward.stars} stars</span>
-          <span aria-hidden="true">x</span>
-          <span>{getDifficultyLabel(reward.difficulty)} x{difficultyMultiplierValue}</span>
-          <span aria-hidden="true">=</span>
-          <strong>{reward.rewardAmount.toLocaleString()} BB Coins</strong>
+          <img
+            alt=""
+            aria-hidden="true"
+            className="reward-sequence-coin-icon"
+            src={`${import.meta.env.BASE_URL}bbcoin.png`}
+          />
+          <strong>{displayedEarnedCoins.toLocaleString()}</strong>
         </div>
-
-        <p className="reward-sequence-caption">
-          {isSequenceFinished
-            ? reward.rewardAmount > 0
-              ? 'Your payout is ready. Continue when you are set.'
-              : 'Round complete. Continue when you are ready.'
-            : reward.rewardAmount > 0
-              ? 'Watch the payout lock in, then continue to bank it.'
-              : 'Locking the result for your profile.'}
-        </p>
 
         {children ? <div className="reward-sequence-extra">{children}</div> : null}
       </div>

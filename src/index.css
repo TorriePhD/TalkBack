@@ -1277,22 +1277,37 @@ p {
 .reward-sequence-stars {
   display: grid;
   gap: 14px;
-  justify-items: start;
+  justify-items: center;
 }
 
-.reward-sequence-value {
-  font-size: clamp(2.8rem, 8vw, 4.6rem);
-  line-height: 0.92;
-  font-weight: 900;
-  color: #fff6b4;
-  text-shadow: 0 0 22px rgba(255, 205, 78, 0.28);
+.reward-sequence-slam-stars {
+  display: flex;
+  justify-content: center;
+  gap: clamp(12px, 3.8vw, 24px);
+  min-height: clamp(84px, 15vw, 118px);
+  width: 100%;
 }
 
-.reward-sequence-subtitle {
-  margin-top: 6px;
-  color: rgba(244, 234, 204, 0.78);
-  font-size: 0.94rem;
-  font-weight: 700;
+.reward-sequence-slam-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(48px, 10vw, 72px);
+  font-size: clamp(2.2rem, 7.8vw, 3.9rem);
+  line-height: 1;
+  color: rgba(255, 250, 218, 0.35);
+  text-shadow:
+    0 0 24px rgba(255, 205, 78, 0.24),
+    0 10px 16px rgba(0, 0, 0, 0.32);
+  transition: opacity 120ms linear;
+}
+
+.reward-sequence-slam-star.is-filled {
+  color: #fff5a2;
+  text-shadow:
+    0 0 26px rgba(255, 212, 94, 0.6),
+    0 8px 14px rgba(255, 142, 45, 0.5),
+    0 12px 18px rgba(0, 0, 0, 0.36);
 }
 
 .reward-sequence-difficulty {
@@ -1333,6 +1348,29 @@ p {
 
 .reward-sequence-formula strong {
   color: #fff0b8;
+}
+
+.reward-sequence-coins {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.reward-sequence-coins img {
+  width: clamp(34px, 7vw, 46px);
+  height: clamp(34px, 7vw, 46px);
+  filter:
+    drop-shadow(0 0 14px rgba(255, 219, 128, 0.6))
+    drop-shadow(0 7px 10px rgba(255, 142, 45, 0.35));
+}
+
+.reward-sequence-coins strong {
+  font-size: clamp(2rem, 7.6vw, 3.1rem);
+  line-height: 1;
+  letter-spacing: 0.01em;
 }
 
 .reward-sequence-caption {
@@ -1383,6 +1421,29 @@ p {
 
 .reward-status-shell p {
   margin: 0;
+}
+
+.reward-loading-state {
+  min-height: clamp(280px, 62vh, 460px);
+  display: grid;
+  place-items: center;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.reward-loading-spinner {
+  width: 122px;
+  height: 122px;
+}
+
+.reward-loading-state p {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
 }
 
 .reward-sequence-total {

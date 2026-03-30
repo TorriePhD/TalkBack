@@ -468,24 +468,50 @@ export function WaveformPlayButton({
           strokeLinejoin="round"
           strokeWidth={strokeWidth}
         />
-      </svg>
 
-      <span className="waveform-play-button-icon" aria-hidden="true">
-        {mode === 'record' ? (
-          <>
-            <span className="waveform-icon-record" />
-            <span className="waveform-icon-stop" />
-          </>
-        ) : (
-          <>
-            <span className="waveform-icon-play" />
-            <span className="waveform-icon-pause">
-              <span />
-              <span />
-            </span>
-          </>
-        )}
-      </span>
+        <g className="waveform-play-button-icon-svg">
+          <polygon
+            className="waveform-icon-play-shape"
+            fill={`url(#${gradientId})`}
+            points={`${size * 0.45},${size * 0.375} ${size * 0.45},${size * 0.625} ${size * 0.645},${size * 0.5}`}
+          />
+
+          <g className="waveform-icon-pause-shape" fill={`url(#${gradientId})`}>
+            <rect
+              height={size * 0.245}
+              rx={size * 0.03}
+              width={size * 0.068}
+              x={size * 0.435}
+              y={size * 0.377}
+            />
+            <rect
+              height={size * 0.245}
+              rx={size * 0.03}
+              width={size * 0.068}
+              x={size * 0.53}
+              y={size * 0.377}
+            />
+          </g>
+
+          <circle
+            className="waveform-icon-record-shape"
+            cx={size * 0.5}
+            cy={size * 0.5}
+            fill={`url(#${gradientId})`}
+            r={size * 0.125}
+          />
+
+          <rect
+            className="waveform-icon-stop-shape"
+            fill={`url(#${gradientId})`}
+            height={size * 0.23}
+            rx={size * 0.05}
+            width={size * 0.23}
+            x={size * 0.385}
+            y={size * 0.385}
+          />
+        </g>
+      </svg>
     </button>
   );
 }

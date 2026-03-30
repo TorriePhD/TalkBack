@@ -1791,76 +1791,63 @@ p {
   display: block;
 }
 
-.waveform-play-button-icon {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
+.waveform-play-button-icon-svg {
+  transform-origin: center;
 }
 
-.waveform-icon-play {
-  width: 0;
-  height: 0;
-  border-top: 10px solid transparent;
-  border-bottom: 10px solid transparent;
-  border-left: 16px solid rgba(19, 33, 44, 0.88);
+.waveform-icon-play-shape {
   transform: translateX(2px);
+  transform-origin: center;
   transition: opacity 190ms ease, transform 220ms ease;
 }
 
-.waveform-icon-pause {
-  position: absolute;
-  display: inline-flex;
-  gap: 7px;
+.waveform-icon-pause-shape {
   opacity: 0;
   transform: scale(0.78);
+  transform-origin: center;
   transition: opacity 190ms ease, transform 220ms ease;
 }
 
-.waveform-icon-pause span {
-  width: 5px;
-  height: 19px;
-  border-radius: 999px;
-  background: rgba(19, 33, 44, 0.88);
-}
-
-.waveform-icon-record {
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  background: rgba(19, 33, 44, 0.88);
+.waveform-icon-record-shape {
+  transform-origin: center;
   transition: opacity 190ms ease, transform 220ms ease;
 }
 
-.waveform-icon-stop {
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: rgba(19, 33, 44, 0.88);
+.waveform-icon-stop-shape {
   opacity: 0;
   transform: scale(0.76);
+  transform-origin: center;
   transition: opacity 190ms ease, transform 220ms ease;
 }
 
-.waveform-play-button.is-playing .waveform-icon-play {
+.waveform-play-button.is-playing .waveform-icon-play-shape {
   opacity: 0;
   transform: scale(0.72) translateX(4px);
 }
 
-.waveform-play-button.is-playing .waveform-icon-pause {
+.waveform-play-button.is-playing .waveform-icon-pause-shape {
   opacity: 1;
   transform: scale(1);
 }
 
-.waveform-play-button.is-playing .waveform-icon-record {
+.waveform-play-button.is-playing .waveform-icon-record-shape {
   opacity: 0;
   transform: scale(0.72);
 }
 
-.waveform-play-button.is-playing .waveform-icon-stop {
+.waveform-play-button.is-playing .waveform-icon-stop-shape {
   opacity: 1;
   transform: scale(1);
+}
+
+.waveform-play-button.is-record-control .waveform-icon-play-shape,
+.waveform-play-button.is-record-control .waveform-icon-pause-shape {
+  opacity: 0;
+}
+
+.waveform-play-button:not(.is-record-control) .waveform-icon-record-shape,
+.waveform-play-button:not(.is-record-control) .waveform-icon-stop-shape {
+  opacity: 0;
 }
 
 .audio-card .fine-print {

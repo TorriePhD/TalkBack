@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
+import { WaveformLoader } from '../../../components/WaveformLoader';
 import type { PlaybackStartKind } from '../../../components/WaveformPlayButton';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { useCoins } from '../../resources/ResourceProvider';
@@ -582,12 +583,12 @@ export function PlayRoundPanel({
         : 'Round Review';
   const headerTitle = isRecipient
     ? recipientStage === 'reveal'
-      ? 'BB Coin Reward'
+      ? (roundSummary?.headline ?? 'Round')
       : (roundSummary?.headline ?? 'Round')
     : showSenderRecordingReview
       ? `Review ${round.recipientUsername}'s round`
       : showRewardPage
-        ? 'BB Coin Reward'
+        ? (roundSummary?.headline ?? 'Round')
         : (roundSummary?.headline ?? 'Round');
   const headerDescription = isRecipient
     ? recipientStage === 'reveal'
@@ -814,46 +815,48 @@ export function PlayRoundPanel({
               {isArchiving
                 ? 'Continuing...'
                 : isLoadingReward
-                  ? 'Checking reward...'
+                  ? 'loading...'
                   : 'Continue thread'}
             </button>
           )}
         </div>
       </RoundRewardSequence>
     ) : round.status === 'complete' ? (
-      <div className="reward-status-shell">
-        {isLoadingReward ? <p>Checking your reward state...</p> : null}
-        {!isLoadingReward && !roundReward ? (
-          <>
-            <p>Reward data is missing for this round, so no BB Coin payout can be shown here.</p>
-            <div className="button-row">
-              {isRecipient ? (
-                <button
-                  className="button primary"
-                  disabled={isRewardBusy}
-                  onClick={() => {
-                    void handleRecipientContinue();
-                  }}
-                  type="button"
-                >
-                  Record next prompt
-                </button>
-              ) : (
-                <button
-                  className="button primary"
-                  disabled={isArchiving || isRewardBusy}
-                  onClick={() => {
-                    void handleArchiveRound();
-                  }}
-                  type="button"
-                >
-                  {isArchiving ? 'Continuing...' : 'Continue thread'}
-                </button>
-              )}
-            </div>
-          </>
-        ) : null}
-      </div>
+      isLoadingReward ? (
+        <div aria-live="polite" className="reward-loading-shell" role="status">
+          <WaveformLoader className="reward-loading-spinner" size={136} strokeWidth={4} />
+          <p>loading...</p>
+        </div>
+      ) : (
+        <div className="reward-status-shell">
+          <p>Reward data is missing for this round, so no BB Coin payout can be shown here.</p>
+          <div className="button-row">
+            {isRecipient ? (
+              <button
+                className="button primary"
+                disabled={isRewardBusy}
+                onClick={() => {
+                  void handleRecipientContinue();
+                }}
+                type="button"
+              >
+                Record next prompt
+              </button>
+            ) : (
+              <button
+                className="button primary"
+                disabled={isArchiving || isRewardBusy}
+                onClick={() => {
+                  void handleArchiveRound();
+                }}
+                type="button"
+              >
+                {isArchiving ? 'Continuing...' : 'Continue thread'}
+              </button>
+            )}
+          </div>
+        </div>
+      )
     ) : null;
 
   return (

@@ -33,13 +33,16 @@ interface ParticleRender {
   style: CSSProperties;
 }
 
-const STAR_DURATION_MS = 720;
-const DIFFICULTY_DURATION_MS = 320;
-const FORMULA_DURATION_MS = 260;
-const BURST_DURATION_MS = 560;
+const MAX_STARS = 3;
+const REWARD_TIMING_SCALE = 2;
+const STAR_SLAM_DURATION_MS = 500 * REWARD_TIMING_SCALE;
+const STAR_STAGGER_MS = 280 * REWARD_TIMING_SCALE;
+const ZERO_STAR_REVEAL_DURATION_MS = 260 * REWARD_TIMING_SCALE;
+const DIFFICULTY_SLAM_DURATION_MS = 460 * REWARD_TIMING_SCALE;
+const MULTIPLIER_COUNT_DELAY_MS = 110 * REWARD_TIMING_SCALE;
+const MULTIPLIER_COUNT_DURATION_MS = 360 * REWARD_TIMING_SCALE;
+const BURST_DURATION_MS = 620 * REWARD_TIMING_SCALE;
 const TARGET_MARKER_SIZE_PX = 44;
-const TOTAL_DURATION_MS =
-  STAR_DURATION_MS + DIFFICULTY_DURATION_MS + FORMULA_DURATION_MS + BURST_DURATION_MS;
 
 function clamp(value: number, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
@@ -115,6 +118,24 @@ function createParticleSpecs(rewardAmount: number) {
   }));
 }
 
+function getStarStageDurationMs(starCount: number) {
+  return starCount > 0
+    ? STAR_SLAM_DURATION_MS + Math.max(0, starCount - 1) * STAR_STAGGER_MS
+    : ZERO_STAR_REVEAL_DURATION_MS;
+}
+
+function getBurstStartMs(starCount: number) {
+  const starStageDurationMs = getStarStageDurationMs(starCount);
+  return (
+    starStageDurationMs +
+    Math.max(DIFFICULTY_SLAM_DURATION_MS, MULTIPLIER_COUNT_DELAY_MS + MULTIPLIER_COUNT_DURATION_MS)
+  );
+}
+
+function getTotalDurationMs(starCount: number) {
+  return getBurstStartMs(starCount) + BURST_DURATION_MS;
+}
+
 export function RoundRewardSequence({
   baseCoins,
   reward,
@@ -123,52 +144,120 @@ export function RoundRewardSequence({
   startCompleted = false,
   children,
 }: RoundRewardSequenceProps) {
-  const [elapsedMs, setElapsedMs] = useState(startCompleted ? TOTAL_DURATION_MS : 0);
+  const starStageDurationMs = getStarStageDurationMs(reward.stars);
+  const burstStartMs = getBurstStartMs(reward.stars);
+  const totalDurationMs = getTotalDurationMs(reward.stars);
+  const [elapsedMs, setElapsedMs] = useState(startCompleted ? totalDurationMs : 0);
   const [burstOrigin, setBurstOrigin] = useState<Point | null>(null);
   const [targetPoint, setTargetPoint] = useState<Point | null>(null);
   const sequenceCardRef = useRef<HTMLDivElement | null>(null);
-  const formulaRef = useRef<HTMLDivElement | null>(null);
+  const coinBurstOriginRef = useRef<HTMLSpanElement | null>(null);
   const hasCompletedAnimationRef = useRef(startCompleted);
-
-  const starsProgress = clamp(elapsedMs / STAR_DURATION_MS);
-  const difficultyProgress = clamp((elapsedMs - STAR_DURATION_MS) / DIFFICULTY_DURATION_MS);
-  const formulaProgress = clamp(
-    (elapsedMs - STAR_DURATION_MS - DIFFICULTY_DURATION_MS) / FORMULA_DURATION_MS,
+  const difficultyStageStartMs = starStageDurationMs;
+  const difficultyProgress = clamp(
+    (elapsedMs - difficultyStageStartMs) / DIFFICULTY_SLAM_DURATION_MS,
   );
-  const burstProgress = clamp(
-    (elapsedMs - STAR_DURATION_MS - DIFFICULTY_DURATION_MS - FORMULA_DURATION_MS) /
-      BURST_DURATION_MS,
+  const multiplierProgress = clamp(
+    (elapsedMs - difficultyStageStartMs - MULTIPLIER_COUNT_DELAY_MS) /
+      MULTIPLIER_COUNT_DURATION_MS,
   );
+  const burstProgress = clamp((elapsedMs - burstStartMs) / BURST_DURATION_MS);
   const difficultyMultiplierValue = difficultyMultiplier[reward.difficulty];
-  const displayedStarValue = reward.stars * easeOutBack(starsProgress, 1.18);
-  const isSequenceFinished = elapsedMs >= TOTAL_DURATION_MS;
-  const stageLabel =
-    isSequenceFinished
-      ? 'Reward Ready'
-      : burstProgress > 0
-        ? 'Banking BB Coins'
-        : formulaProgress > 0
-          ? 'Calculating Reward'
-          : difficultyProgress > 0
-            ? 'Locking Difficulty'
-            : 'Counting Stars';
-  const starCounterLabel =
-    starsProgress < 1 && reward.stars > 0
-      ? displayedStarValue.toFixed(1)
-      : `${reward.stars}`;
-  const difficultyDrop = 1 - easeOutBack(difficultyProgress, 1.34);
-  const formulaReveal = easeOutCubic(formulaProgress);
+  const isSequenceFinished = elapsedMs >= totalDurationMs;
   const targetPulseScale = 0.94 + burstProgress * 0.32;
   const particles = useMemo(() => createParticleSpecs(reward.rewardAmount), [reward.rewardAmount]);
   const displayedCoinTotal =
     reward.rewardAmount === 0
       ? baseCoins
       : baseCoins + Math.round(reward.rewardAmount * easeOutCubic(burstProgress));
+  const starEntryProgresses = useMemo(
+    () =>
+      Array.from({ length: MAX_STARS }, (_, index) =>
+        index >= reward.stars
+          ? 0
+          : clamp((elapsedMs - index * STAR_STAGGER_MS) / STAR_SLAM_DURATION_MS),
+      ),
+    [elapsedMs, reward.stars],
+  );
+  const displayedStarValue = useMemo(
+    () =>
+      starEntryProgresses.reduce(
+        (total, progress, index) =>
+          total + (index >= reward.stars ? 0 : clamp(easeOutBack(progress, 1.12 + index * 0.16))),
+        0,
+      ),
+    [reward.stars, starEntryProgresses],
+  );
+  const landedStarCount = starEntryProgresses.reduce(
+    (total, progress, index) => total + (index < reward.stars && progress >= 0.72 ? 1 : 0),
+    0,
+  );
+  const isStarImpactActive = starEntryProgresses.some((progress, index) => {
+    if (index >= reward.stars) {
+      return false;
+    }
+
+    return progress > 0.56 && progress < 0.82;
+  });
+  const isDifficultyImpactActive = difficultyProgress > 0.16 && difficultyProgress < 0.44;
+  const displayedRewardCounter =
+    multiplierProgress > 0
+      ? Math.round(
+          reward.stars + (reward.rewardAmount - reward.stars) * easeOutCubic(multiplierProgress),
+        )
+      : landedStarCount;
+  const counterScale =
+    multiplierProgress > 0 && multiplierProgress < 1
+      ? 1 + (1 - Math.abs(multiplierProgress - 0.5) / 0.5) * 0.08
+      : isStarImpactActive
+        ? 1.03
+        : 1;
+  const starStyles = useMemo<CSSProperties[]>(
+    () =>
+      Array.from({ length: MAX_STARS }, (_, index) => {
+        if (index >= reward.stars) {
+          return {
+            opacity: 0.48,
+            transform: 'translate3d(0, 0, 0) scale(0.92)',
+          };
+        }
+
+        const progress = starEntryProgresses[index];
+
+        if (progress <= 0) {
+          return {
+            opacity: 0,
+            transform: `translate3d(0, ${-(72 + index * 28)}px, 0) scale(0.34) rotate(${
+              -12 - index * 4
+            }deg)`,
+          };
+        }
+
+        const motionProgress = easeOutBack(progress, 1.26 + index * 0.24);
+        const dropDistance = 72 + index * 28;
+
+        return {
+          opacity: Math.min(1, 0.14 + progress * 1.24),
+          transform: `translate3d(0, ${-dropDistance + motionProgress * dropDistance}px, 0) scale(${
+            0.42 + motionProgress * 0.58
+          }) rotate(${(1 - Math.min(motionProgress, 1.1)) * (-12 - index * 4)}deg)`,
+          filter: `drop-shadow(0 ${10 + index * 4}px ${18 + index * 6}px rgba(255, 172, 52, ${
+            0.18 + progress * 0.28
+          }))`,
+        };
+      }),
+    [reward.stars, starEntryProgresses],
+  );
+
+  useEffect(() => {
+    hasCompletedAnimationRef.current = startCompleted;
+    setElapsedMs(startCompleted ? totalDurationMs : 0);
+    setBurstOrigin(null);
+    setTargetPoint(null);
+  }, [startCompleted, totalDurationMs, reward.id]);
 
   useEffect(() => {
     if (startCompleted) {
-      setElapsedMs(TOTAL_DURATION_MS);
-      hasCompletedAnimationRef.current = true;
       return;
     }
 
@@ -180,10 +269,10 @@ export function RoundRewardSequence({
         startTimeMs = timestampMs;
       }
 
-      const nextElapsedMs = Math.min(timestampMs - startTimeMs, TOTAL_DURATION_MS);
+      const nextElapsedMs = Math.min(timestampMs - startTimeMs, totalDurationMs);
       setElapsedMs(nextElapsedMs);
 
-      if (nextElapsedMs < TOTAL_DURATION_MS) {
+      if (nextElapsedMs < totalDurationMs) {
         animationFrameId = window.requestAnimationFrame(animate);
       }
     };
@@ -193,20 +282,20 @@ export function RoundRewardSequence({
     return () => {
       window.cancelAnimationFrame(animationFrameId);
     };
-  }, [startCompleted]);
+  }, [startCompleted, totalDurationMs, reward.id]);
 
   useEffect(() => {
     onDisplayedCoinsChange(displayedCoinTotal);
   }, [displayedCoinTotal, onDisplayedCoinsChange]);
 
   useEffect(() => {
-    if (elapsedMs < TOTAL_DURATION_MS || hasCompletedAnimationRef.current) {
+    if (elapsedMs < totalDurationMs || hasCompletedAnimationRef.current) {
       return;
     }
 
     hasCompletedAnimationRef.current = true;
     onAnimationComplete?.();
-  }, [elapsedMs, onAnimationComplete]);
+  }, [elapsedMs, onAnimationComplete, totalDurationMs]);
 
   useEffect(() => {
     if (burstProgress === 0 && burstOrigin && targetPoint) {
@@ -217,7 +306,7 @@ export function RoundRewardSequence({
       return;
     }
 
-    const originElement = formulaRef.current ?? sequenceCardRef.current;
+    const originElement = coinBurstOriginRef.current ?? sequenceCardRef.current;
     const nextOrigin = getCenterPoint(originElement);
     const nextTarget = getCoinDisplayTargetPoint();
 
@@ -270,7 +359,9 @@ export function RoundRewardSequence({
 
   return (
     <div
-      className={`reward-sequence-inline${difficultyProgress > 0.68 && difficultyProgress < 0.98 ? ' is-shaking' : ''}`}
+      className={`reward-sequence-inline${
+        isStarImpactActive || isDifficultyImpactActive ? ' is-shaking' : ''
+      }`}
       role="presentation"
     >
       {!isSequenceFinished && targetPoint ? (
@@ -279,59 +370,56 @@ export function RoundRewardSequence({
           style={{
             width: `${TARGET_MARKER_SIZE_PX}px`,
             height: `${TARGET_MARKER_SIZE_PX}px`,
-            transform: `translate(${targetPoint.x - TARGET_MARKER_SIZE_PX / 2}px, ${targetPoint.y - TARGET_MARKER_SIZE_PX / 2}px) scale(${targetPulseScale})`,
+            transform: `translate(${targetPoint.x - TARGET_MARKER_SIZE_PX / 2}px, ${
+              targetPoint.y - TARGET_MARKER_SIZE_PX / 2
+            }px) scale(${targetPulseScale})`,
           }}
         />
       ) : null}
 
       <div className="reward-sequence-card" ref={sequenceCardRef}>
-        <div className="reward-sequence-label">BB Coin Reward</div>
-        <div className="reward-sequence-stage">{stageLabel}</div>
-
-        <div className="reward-sequence-stars">
-          <div>
-            <div className="reward-sequence-value">{starCounterLabel}</div>
-            <div className="reward-sequence-subtitle">
-              {reward.stars === 1 ? 'star earned' : 'stars earned'}
-            </div>
+        <div className="reward-sequence-hero">
+          <div className="reward-sequence-stars">
+            <StarRating
+              large
+              label={`${reward.stars} stars`}
+              starStyles={starStyles}
+              value={displayedStarValue}
+            />
           </div>
-          <StarRating large label={`${reward.stars} stars`} value={displayedStarValue} />
-        </div>
 
-        <div
-          className={`reward-sequence-difficulty${difficultyProgress > 0 ? ' is-visible' : ''}`}
-          style={{
-            opacity: difficultyProgress === 0 ? 0 : 1,
-            transform: `translate3d(0, ${-130 * difficultyDrop}px, 0) scale(${0.92 + difficultyProgress * 0.08})`,
-          }}
-        >
-          {getDifficultyLabel(reward.difficulty)}
-        </div>
+          <div
+            className={`reward-sequence-difficulty${difficultyProgress > 0 ? ' is-visible' : ''}`}
+            style={{
+              opacity: difficultyProgress === 0 ? 0 : 1,
+              transform: `translate3d(0, ${
+                -160 * (1 - easeOutBack(difficultyProgress, 1.48))
+              }px, 0) scale(${0.72 + easeOutBack(difficultyProgress, 1.36) * 0.28})`,
+            }}
+          >
+            {getDifficultyLabel(reward.difficulty)} x{difficultyMultiplierValue}
+          </div>
 
-        <div
-          className={`reward-sequence-formula${formulaProgress > 0 ? ' is-visible' : ''}`}
-          ref={formulaRef}
-          style={{
-            opacity: formulaReveal,
-            transform: `translate3d(0, ${(1 - formulaReveal) * 20}px, 0) scale(${0.96 + formulaReveal * 0.04})`,
-          }}
-        >
-          <span>{reward.stars} stars</span>
-          <span aria-hidden="true">x</span>
-          <span>{getDifficultyLabel(reward.difficulty)} x{difficultyMultiplierValue}</span>
-          <span aria-hidden="true">=</span>
-          <strong>{reward.rewardAmount.toLocaleString()} BB Coins</strong>
+          <div
+            aria-label={`${displayedRewardCounter.toLocaleString()} BB Coins`}
+            className="reward-sequence-coins"
+            style={{
+              transform: `scale(${counterScale})`,
+            }}
+          >
+            <span className="reward-sequence-coin-icon-anchor" ref={coinBurstOriginRef}>
+              <img
+                alt=""
+                aria-hidden="true"
+                className="reward-sequence-coin-icon"
+                src={`${import.meta.env.BASE_URL}bbcoin.png`}
+              />
+            </span>
+            <strong className="reward-sequence-coin-value">
+              {Math.max(0, displayedRewardCounter).toLocaleString()}
+            </strong>
+          </div>
         </div>
-
-        <p className="reward-sequence-caption">
-          {isSequenceFinished
-            ? reward.rewardAmount > 0
-              ? 'Your payout is ready. Continue when you are set.'
-              : 'Round complete. Continue when you are ready.'
-            : reward.rewardAmount > 0
-              ? 'Watch the payout lock in, then continue to bank it.'
-              : 'Locking the result for your profile.'}
-        </p>
 
         {children ? <div className="reward-sequence-extra">{children}</div> : null}
       </div>

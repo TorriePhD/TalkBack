@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import { StarRating } from '../../../components/StarRating';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { useCoins } from '../../resources/ResourceProvider';
-import { calculateCoinReward, saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
+import { claimReward, getRoundReward } from '../../../lib/roundRewards';
+import { markRoundResultsViewed, saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
 import { getRoundSummary, getScorePresentation } from '../scorePresentation';
-import { scoreGuess } from '../utils';
-import type { Round } from '../types';
+import type { Round, RoundReward } from '../types';
+import { RoundRewardSequence } from './RoundRewardSequence';
 
 interface PlayRoundPanelProps {
   currentUserId: string;
@@ -66,6 +67,38 @@ function getRecipientStepLabel(stage: RecipientStage) {
   }
 }
 
+function getRewardAnimationStorageKey(userId: string, roundId: string) {
+  return `backtalk:round-reward:${userId}:${roundId}`;
+}
+
+function hasStartedRewardAnimation(userId: string, roundId: string) {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return window.sessionStorage.getItem(getRewardAnimationStorageKey(userId, roundId)) === 'started';
+}
+
+function markRewardAnimationStarted(userId: string, roundId: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.sessionStorage.setItem(getRewardAnimationStorageKey(userId, roundId), 'started');
+}
+
+function clearRewardAnimationState(userId: string, roundId: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.sessionStorage.removeItem(getRewardAnimationStorageKey(userId, roundId));
+}
+
+function formatDifficultyLabel(difficulty: RoundReward['difficulty']) {
+  return difficulty.toUpperCase();
+}
+
 export function PlayRoundPanel({
   currentUserId,
   round,
@@ -75,15 +108,23 @@ export function PlayRoundPanel({
   onUpdateRound,
 }: PlayRoundPanelProps) {
   const recorder = useAudioRecorder({ preparedStreamIdleMs: 0 });
-  const { applyOptimisticCoinDelta, refreshCoins } = useCoins();
+  const { coins, isLoadingCoins, refreshCoins, setCoinBalance, setCoinPreview } = useCoins();
   const [guess, setGuess] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [isSavingAttempt, setIsSavingAttempt] = useState(false);
   const [isSubmittingGuess, setIsSubmittingGuess] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [isLoadingReward, setIsLoadingReward] = useState(false);
+  const [isAnimatingReward, setIsAnimatingReward] = useState(false);
+  const [isClaimingReward, setIsClaimingReward] = useState(false);
+  const [roundReward, setRoundReward] = useState<RoundReward | null>(null);
+  const [localCoinGain, setLocalCoinGain] = useState(0);
+  const [displayedTotalCoins, setDisplayedTotalCoins] = useState(0);
   const [hasConfirmedListen, setHasConfirmedListen] = useState(false);
   const lastSavedAttemptBlobRef = useRef<Blob | null>(null);
+  const rewardBaseCoinsRef = useRef(0);
+  const loadedRewardRoundIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setGuess(round?.guess ?? '');
@@ -92,7 +133,16 @@ export function PlayRoundPanel({
     setHasConfirmedListen(false);
     recorder.clearRecording();
     lastSavedAttemptBlobRef.current = null;
-  }, [round?.id, recorder.clearRecording]);
+    setRoundReward(null);
+    setIsLoadingReward(false);
+    setIsAnimatingReward(false);
+    setIsClaimingReward(false);
+    setLocalCoinGain(0);
+    setDisplayedTotalCoins(coins);
+    rewardBaseCoinsRef.current = coins;
+    loadedRewardRoundIdRef.current = null;
+    setCoinPreview(null);
+  }, [currentUserId, round?.id, recorder.clearRecording, setCoinPreview]);
 
   const isRecipient = Boolean(round && round.recipientId === currentUserId);
   const hasAttempt = Boolean(
@@ -123,6 +173,82 @@ export function PlayRoundPanel({
       !isSavingAttempt &&
       !isSubmittingGuess,
     [guess, hasAttempt, isRecipient, isSavingAttempt, isSubmittingGuess, round],
+  );
+  const isRewardBusy = isAnimatingReward || isClaimingReward;
+
+  const updateRewardPreview = useCallback(
+    (nextDisplayedCoins: number) => {
+      setDisplayedTotalCoins(nextDisplayedCoins);
+      setLocalCoinGain(Math.max(0, nextDisplayedCoins - rewardBaseCoinsRef.current));
+      setCoinPreview(nextDisplayedCoins);
+    },
+    [setCoinPreview],
+  );
+
+  const settleClaimedReward = useCallback(
+    async (rewardToSettle: RoundReward, options: { claimedNow: boolean; currentBalance: number | null }) => {
+      if (options.currentBalance !== null) {
+        setCoinBalance(options.currentBalance);
+        setDisplayedTotalCoins(options.currentBalance);
+      } else {
+        try {
+          const refreshedCoins = await refreshCoins();
+          setDisplayedTotalCoins(refreshedCoins);
+        } catch (refreshError) {
+          console.warn('Unable to refresh BB Coins after claiming a round reward.', refreshError);
+        }
+      }
+
+      setRoundReward({ ...rewardToSettle, claimed: true });
+      setLocalCoinGain(0);
+      setIsAnimatingReward(false);
+      setIsClaimingReward(false);
+      setCoinPreview(null);
+      clearRewardAnimationState(currentUserId, rewardToSettle.roundId);
+      setInfo(
+        rewardToSettle.rewardAmount > 0 && options.claimedNow
+          ? `Reward claimed. +${rewardToSettle.rewardAmount} BB Coins.`
+          : 'Reward already settled for this round.',
+      );
+    },
+    [currentUserId, refreshCoins, setCoinBalance, setCoinPreview],
+  );
+
+  const finalizePendingRewardClaim = useCallback(
+    async (rewardToClaim: RoundReward) => {
+      setIsAnimatingReward(false);
+      setIsClaimingReward(true);
+
+      try {
+        const claimResult = await claimReward(currentUserId, rewardToClaim.roundId);
+
+        if (!claimResult) {
+          setRoundReward(null);
+          setLocalCoinGain(0);
+          setDisplayedTotalCoins(rewardBaseCoinsRef.current);
+          setIsClaimingReward(false);
+          setCoinPreview(null);
+          clearRewardAnimationState(currentUserId, rewardToClaim.roundId);
+          return;
+        }
+
+        await settleClaimedReward(claimResult.reward, {
+          claimedNow: claimResult.claimedNow,
+          currentBalance: claimResult.currentBalance,
+        });
+      } catch (caughtError) {
+        setIsClaimingReward(false);
+        setCoinPreview(null);
+        setDisplayedTotalCoins(rewardBaseCoinsRef.current);
+        setLocalCoinGain(0);
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : 'Unable to claim the round reward.',
+        );
+      }
+    },
+    [currentUserId, settleClaimedReward, setCoinPreview],
   );
 
   const saveAttempt = async (
@@ -208,6 +334,89 @@ export function PlayRoundPanel({
     };
   }, [currentUserId, isRecipient, onUpdateRound, recorder.audioBlob, recorder.isRecording, round]);
 
+  useEffect(() => {
+    if (!round || round.status !== 'complete' || !currentUserId || isLoadingCoins) {
+      return;
+    }
+
+    if (loadedRewardRoundIdRef.current === round.id) {
+      return;
+    }
+
+    loadedRewardRoundIdRef.current = round.id;
+    let cancelled = false;
+
+    const loadRoundReward = async () => {
+      setIsLoadingReward(true);
+
+      try {
+        try {
+          await markRoundResultsViewed(round.id);
+        } catch (markViewedError) {
+          console.warn('Unable to mark the completed round as viewed.', markViewedError);
+        }
+
+        const reward = await getRoundReward(currentUserId, round.id);
+
+        if (cancelled) {
+          return;
+        }
+
+        setRoundReward(reward);
+        rewardBaseCoinsRef.current = coins;
+        setDisplayedTotalCoins(coins);
+        setLocalCoinGain(0);
+
+        if (!reward) {
+          setCoinPreview(null);
+          return;
+        }
+
+        if (reward.claimed) {
+          setCoinPreview(null);
+          clearRewardAnimationState(currentUserId, round.id);
+          return;
+        }
+
+        if (hasStartedRewardAnimation(currentUserId, round.id)) {
+          updateRewardPreview(coins + reward.rewardAmount);
+          await finalizePendingRewardClaim(reward);
+          return;
+        }
+
+        updateRewardPreview(coins);
+        markRewardAnimationStarted(currentUserId, round.id);
+        setIsAnimatingReward(true);
+      } catch (caughtError) {
+        if (!cancelled) {
+          setError(
+            caughtError instanceof Error
+              ? caughtError.message
+              : 'Unable to load the round reward.',
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingReward(false);
+        }
+      }
+    };
+
+    void loadRoundReward();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    coins,
+    currentUserId,
+    finalizePendingRewardClaim,
+    isLoadingCoins,
+    round,
+    updateRewardPreview,
+    setCoinPreview,
+  ]);
+
   if (!round) {
     return (
       <section className="surface round-screen">
@@ -234,14 +443,9 @@ export function PlayRoundPanel({
     setError(null);
     setInfo(null);
     setIsSubmittingGuess(true);
-    const optimisticAwardAmount = calculateCoinReward(
-      scoreGuess(nextGuess, round.correctPhrase),
-      round.difficulty,
-    );
-    const rollbackOptimisticCoins = applyOptimisticCoinDelta(optimisticAwardAmount);
 
     try {
-      const { round: updatedRound, awardedAmount } = await submitRoundGuess({
+      const updatedRound = await submitRoundGuess({
         roundId: round.id,
         guess: nextGuess,
         correctPhrase: round.correctPhrase,
@@ -255,25 +459,8 @@ export function PlayRoundPanel({
         attemptAudioBlob: currentRound.attemptAudioBlob,
         attemptReversedBlob: currentRound.attemptReversedBlob,
       }));
-      try {
-        await refreshCoins();
-      } catch (refreshError) {
-        console.warn('Unable to refresh BB Coins after rewarding the round.', refreshError);
-      }
-
-      setInfo(
-        awardedAmount > 0
-          ? `Score revealed. +${awardedAmount} BB Coins.`
-          : 'Score revealed.',
-      );
+      setInfo('Score revealed. Your BB Coin reward will lock in on this results screen.');
     } catch (caughtError) {
-      rollbackOptimisticCoins();
-      try {
-        await refreshCoins();
-      } catch (refreshError) {
-        console.warn('Unable to reconcile BB Coins after a failed reward update.', refreshError);
-      }
-
       setError(
         caughtError instanceof Error ? caughtError.message : 'Unable to submit the guess.',
       );
@@ -288,6 +475,10 @@ export function PlayRoundPanel({
   };
 
   const handleArchiveRound = async () => {
+    if (isRewardBusy) {
+      return;
+    }
+
     setError(null);
     setInfo(null);
     setIsArchiving(true);
@@ -335,6 +526,64 @@ export function PlayRoundPanel({
       />
     </div>
   );
+
+  const rewardStatusCard =
+    round.status === 'complete' ? (
+      <div className="result-box reward-status-box">
+        <div className="reward-status-header">
+          <div>
+            <strong>BB Coin reward</strong>
+            <p>
+              {isRecipient
+                ? 'This reward is only claimed for you when you open the results reveal.'
+                : 'Your reward settles here independently from your friend’s timeline.'}
+            </p>
+          </div>
+          {roundReward ? (
+            <span className={`badge ${roundReward.claimed ? 'complete' : 'attempted'}`}>
+              {roundReward.claimed ? 'Claimed' : isRewardBusy ? 'Locking in' : 'Pending'}
+            </span>
+          ) : null}
+        </div>
+
+        {isLoadingReward ? <p>Checking your reward state...</p> : null}
+
+        {!isLoadingReward && roundReward ? (
+          <>
+            <div className="reward-status-metrics">
+              <span className="reward-status-pill">{roundReward.stars} stars</span>
+              <span className="reward-status-pill">{formatDifficultyLabel(roundReward.difficulty)}</span>
+              <span className="reward-status-pill">
+                +{roundReward.rewardAmount.toLocaleString()} BB Coins
+              </span>
+            </div>
+            <p>
+              <strong>Wallet total:</strong> {displayedTotalCoins.toLocaleString()} BB Coins
+              {localCoinGain > 0 ? ` (+${localCoinGain.toLocaleString()} in motion)` : ''}
+            </p>
+            <p>
+              {roundReward.claimed
+                ? 'This reward has already been collected for your account.'
+                : isAnimatingReward
+                  ? 'Reward reveal in progress.'
+                  : isClaimingReward
+                    ? 'Finalizing your BB Coins...'
+                    : 'Your reward is ready the moment this results view opens.'}
+            </p>
+          </>
+        ) : null}
+
+        {!isLoadingReward && !roundReward ? (
+          <p>Reward data is missing for this round, so no BB Coin payout can be shown here.</p>
+        ) : null}
+
+        {!isRecipient && round.status === 'complete' ? (
+          <p className="reward-status-note">
+            Continue thread unlocks only after both players have opened the results screen.
+          </p>
+        ) : null}
+      </div>
+    ) : null;
 
   return (
     <section className="surface round-screen">
@@ -441,6 +690,8 @@ export function PlayRoundPanel({
                 </p>
               </div>
 
+              {rewardStatusCard}
+
               <AudioPlayerCard
                 title="Original prompt"
                 description="This is the forward clip that started the round you just finished."
@@ -503,6 +754,8 @@ export function PlayRoundPanel({
                 </p>
               </div>
 
+              {rewardStatusCard}
+
               {reviewAudioGrid}
             </div>
           ) : null}
@@ -543,6 +796,7 @@ export function PlayRoundPanel({
           <div className="button-row">
             <button
               className="button primary"
+              disabled={isRewardBusy}
               onClick={onComposeNextRound}
               type="button"
             >
@@ -555,17 +809,39 @@ export function PlayRoundPanel({
           <div className="button-row">
             <button
               className="button primary"
-              disabled={isArchiving}
+              disabled={isArchiving || isRewardBusy || isLoadingReward}
               onClick={() => {
                 void handleArchiveRound();
               }}
               type="button"
             >
-              {isArchiving ? 'Continuing...' : 'Continue thread'}
+              {isArchiving
+                ? 'Continuing...'
+                : isLoadingReward
+                  ? 'Checking reward...'
+                  : 'Continue thread'}
             </button>
           </div>
         ) : null}
       </div>
+
+      {isAnimatingReward && roundReward ? (
+        <RoundRewardSequence
+          baseCoins={rewardBaseCoinsRef.current}
+          onDisplayedCoinsChange={updateRewardPreview}
+          onSequenceComplete={() => finalizePendingRewardClaim(roundReward)}
+          reward={roundReward}
+        />
+      ) : null}
+
+      {isClaimingReward && !isAnimatingReward ? (
+        <div className="reward-claiming-overlay" role="status" aria-live="polite">
+          <div className="reward-claiming-card">
+            <strong>Finalizing BB Coins</strong>
+            <p>Your reward is being committed to your wallet now.</p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="stack">
         {recorder.error ? <div className="error-banner">{recorder.error}</div> : null}

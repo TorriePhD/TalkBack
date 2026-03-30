@@ -113,9 +113,9 @@ export function getRoundSummary(round: Round, isRecipient: boolean): RoundSummar
   if (isRecipient) {
     if (round.status === 'complete') {
       return {
-        headline: 'Round complete. Your stars are in.',
-        description: 'Your score is locked. Your friend still needs to review the attempt before the next round can move on.',
-        callToAction: 'Check the score, then head back to the thread.',
+        headline: 'Round complete. Your reward reveal is ready.',
+        description: 'Your score is locked. Opening the results banks your BB Coins, and your friend still needs to review before the next round can move on.',
+        callToAction: 'Check the score and let the BB Coin reveal finish.',
       };
     }
 
@@ -137,8 +137,8 @@ export function getRoundSummary(round: Round, isRecipient: boolean): RoundSummar
   if (round.status === 'complete') {
     return {
       headline: `${round.recipientUsername} finished the round.`,
-      description: 'See the score and continue the thread.',
-      callToAction: 'Open the review and move to the next turn.',
+      description: 'See the score, bank your own BB Coins, and continue the thread after both players open results.',
+      callToAction: 'Open the review to settle your reward.',
     };
   }
 

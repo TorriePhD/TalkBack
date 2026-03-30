@@ -2,6 +2,7 @@ import { supabase, supabaseConfigError } from '../supabase';
 
 const AUDIO_BUCKET = 'audio';
 const DEFAULT_PREFIX = 'rounds';
+const missingAudioPaths = new Set<string>();
 
 interface UploadAudioOptions {
   ownerId: string;
@@ -11,6 +12,10 @@ interface UploadAudioOptions {
 
 export interface UploadedAudioAsset {
   path: string;
+}
+
+function isMissingStorageObjectError(message: string) {
+  return /not found|does not exist|no such key|not exist/i.test(message);
 }
 
 function sanitizePathSegment(value: string) {
@@ -40,11 +45,21 @@ export async function createSignedAudioUrl(path: string | null | undefined) {
     return null;
   }
 
+  if (missingAudioPaths.has(path)) {
+    return null;
+  }
+
   const { data, error } = await supabase.storage
     .from(AUDIO_BUCKET)
     .createSignedUrl(path, 60 * 60);
 
   if (error) {
+    if (isMissingStorageObjectError(error.message)) {
+      missingAudioPaths.add(path);
+      console.warn(`Audio object missing for path "${path}". Falling back to no remote URL.`);
+      return null;
+    }
+
     throw new Error(`Unable to create an audio URL: ${error.message}`);
   }
 

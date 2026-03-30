@@ -1,12 +1,15 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getCoins } from './resourceApi';
 import { RESOURCE_TYPES } from './resourceTypes';
 
 interface ResourceWalletContextValue {
   coins: number;
+  displayedCoins: number;
   isLoadingCoins: boolean;
-  refreshCoins: () => Promise<void>;
-  applyOptimisticCoinDelta: (amount: number) => () => void;
+  refreshCoins: () => Promise<number>;
+  commitCoinDelta: (amount: number) => void;
+  setCoinBalance: (amount: number) => void;
+  setCoinPreview: (amount: number | null) => void;
 }
 
 const ResourceWalletContext = createContext<ResourceWalletContextValue | null>(null);
@@ -27,11 +30,13 @@ export function ResourceProvider({
   children: ReactNode;
 }) {
   const [coinCount, setCoinCount] = useState(0);
+  const [coinPreview, setCoinPreview] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!currentUserId) {
       setCoinCount(0);
+      setCoinPreview(null);
       setIsLoading(false);
       return;
     }
@@ -65,34 +70,45 @@ export function ResourceProvider({
     };
   }, [currentUserId]);
 
-  const refreshCoins = async () => {
+  const refreshCoins = useCallback(async () => {
     if (!currentUserId) {
       setCoinCount(0);
-      return;
+      setCoinPreview(null);
+      return 0;
     }
 
     const nextCoinCount = await getCoins(currentUserId);
     setCoinCount(nextCoinCount);
-  };
+    return nextCoinCount;
+  }, [currentUserId]);
 
-  const contextValue: ResourceWalletContextValue = {
+  const commitCoinDelta = useCallback((amount: number) => {
+    const safeAmount = clampAmount(amount);
+
+    if (safeAmount === 0) {
+      return;
+    }
+
+    setCoinCount((currentAmount) => currentAmount + safeAmount);
+  }, []);
+
+  const setCoinBalance = useCallback((amount: number) => {
+    setCoinCount(clampAmount(amount));
+  }, []);
+
+  const updateCoinPreview = useCallback((amount: number | null) => {
+    setCoinPreview(amount === null ? null : clampAmount(amount));
+  }, []);
+
+  const contextValue: ResourceWalletContextValue = useMemo(() => ({
     coins: coinCount,
+    displayedCoins: coinPreview ?? coinCount,
     isLoadingCoins: isLoading,
     refreshCoins,
-    applyOptimisticCoinDelta: (amount: number) => {
-      const safeAmount = clampAmount(amount);
-
-      if (safeAmount === 0) {
-        return () => undefined;
-      }
-
-      setCoinCount((currentAmount) => currentAmount + safeAmount);
-
-      return () => {
-        setCoinCount((currentAmount) => Math.max(0, currentAmount - safeAmount));
-      };
-    },
-  };
+    commitCoinDelta,
+    setCoinBalance,
+    setCoinPreview: updateCoinPreview,
+  }), [coinCount, coinPreview, commitCoinDelta, isLoading, refreshCoins, setCoinBalance, updateCoinPreview]);
 
   return (
     <ResourceWalletContext.Provider value={contextValue}>
@@ -116,13 +132,17 @@ export function useResourceWallet() {
 }
 
 export function CoinDisplay() {
-  const { coins, isLoadingCoins } = useCoins();
+  const { displayedCoins, isLoadingCoins } = useCoins();
 
   return (
-    <div className="coin-display" aria-label={`BB Coins: ${coins.toLocaleString()}`}>
+    <div
+      className="coin-display"
+      data-coin-display="true"
+      aria-label={`BB Coins: ${displayedCoins.toLocaleString()}`}
+    >
       <img alt="" aria-hidden="true" className="coin-icon" src="/bbcoin.png" />
       <strong className={`coin-display-value${isLoadingCoins ? ' is-loading' : ''}`}>
-        {coins.toLocaleString()}
+        {displayedCoins.toLocaleString()}
       </strong>
     </div>
   );

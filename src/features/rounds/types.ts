@@ -18,6 +18,17 @@ export interface ArchiveCompletedRoundSummary extends FriendThreadStats {
   recipientId: string;
 }
 
+export interface RoundReward {
+  id: string;
+  roundId: string;
+  userId: string;
+  stars: RoundStarCount;
+  difficulty: WordDifficulty;
+  rewardAmount: number;
+  claimed: boolean;
+  createdAt: string;
+}
+
 export interface Round {
   id: string;
   createdAt: string;

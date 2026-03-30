@@ -1170,6 +1170,264 @@ p {
   color: #18886c;
 }
 
+.reward-status-box {
+  display: grid;
+  gap: 14px;
+  background:
+    linear-gradient(145deg, rgba(255, 250, 237, 0.98), rgba(255, 244, 214, 0.9)),
+    radial-gradient(circle at top right, rgba(255, 179, 0, 0.18), transparent 42%);
+  border: 1px solid rgba(186, 117, 12, 0.12);
+}
+
+.reward-status-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reward-status-header p,
+.reward-status-box p {
+  margin-bottom: 0;
+}
+
+.reward-status-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reward-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(186, 117, 12, 0.14);
+  color: #704008;
+  font-size: 0.84rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.reward-status-note {
+  color: #7a5322;
+  font-size: 0.92rem;
+}
+
+.reward-sequence-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 24px 18px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 201, 94, 0.16), transparent 30%),
+    radial-gradient(circle at bottom left, rgba(77, 121, 255, 0.18), transparent 36%),
+    rgba(9, 17, 29, 0.46);
+  backdrop-filter: blur(8px);
+}
+
+.reward-sequence-overlay.is-shaking {
+  animation: reward-screen-shake 220ms ease-out;
+}
+
+.reward-sequence-card {
+  width: min(520px, calc(100vw - 36px));
+  display: grid;
+  gap: 18px;
+  padding: 24px 22px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 219, 128, 0.34);
+  background:
+    linear-gradient(160deg, rgba(17, 27, 47, 0.96), rgba(22, 34, 56, 0.92)),
+    radial-gradient(circle at top left, rgba(255, 205, 78, 0.22), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(0, 229, 255, 0.12), transparent 34%);
+  color: #f6fbff;
+  box-shadow:
+    0 28px 70px rgba(6, 11, 20, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+.reward-sequence-stage {
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(244, 234, 204, 0.88);
+}
+
+.reward-sequence-stars {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+
+.reward-sequence-value {
+  font-size: clamp(2.8rem, 8vw, 4.6rem);
+  line-height: 0.92;
+  font-weight: 900;
+  color: #fff6b4;
+  text-shadow: 0 0 22px rgba(255, 205, 78, 0.28);
+}
+
+.reward-sequence-subtitle {
+  margin-top: 6px;
+  color: rgba(244, 234, 204, 0.78);
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.reward-sequence-difficulty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  min-height: 54px;
+  padding: 12px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 220, 144, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 174, 0, 0.88), rgba(211, 111, 3, 0.9)),
+    rgba(255, 255, 255, 0.08);
+  color: #201105;
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow:
+    0 18px 30px rgba(0, 0, 0, 0.22),
+    0 10px 0 rgba(95, 45, 0, 0.18);
+}
+
+.reward-sequence-formula {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 247, 228, 0.88)),
+    rgba(255, 255, 255, 0.86);
+  color: #30200d;
+  box-shadow:
+    0 18px 36px rgba(8, 14, 23, 0.16),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+
+.reward-sequence-formula span,
+.reward-sequence-formula strong {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.reward-sequence-formula strong {
+  color: #b96d00;
+}
+
+.reward-sequence-caption {
+  margin: 0;
+  color: rgba(244, 234, 204, 0.82);
+}
+
+.reward-sequence-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.reward-sequence-continue {
+  min-width: 164px;
+}
+
+.reward-sequence-target {
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 217, 107, 0.9);
+  box-shadow:
+    0 0 0 10px rgba(255, 217, 107, 0.12),
+    0 0 22px rgba(255, 217, 107, 0.35);
+  animation: reward-target-pulse 420ms ease-out infinite alternate;
+  pointer-events: none;
+}
+
+.reward-coin-particle {
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: 121;
+  pointer-events: none;
+  filter:
+    drop-shadow(0 0 10px rgba(255, 217, 107, 0.4))
+    drop-shadow(0 0 18px rgba(0, 229, 255, 0.2));
+  will-change: transform, opacity;
+}
+
+.reward-claiming-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 119;
+  display: grid;
+  place-items: center;
+  padding: 24px 18px;
+  background: rgba(8, 14, 23, 0.22);
+  backdrop-filter: blur(4px);
+}
+
+.reward-claiming-card {
+  width: min(360px, calc(100vw - 40px));
+  padding: 18px 20px;
+  border-radius: 22px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(255, 251, 241, 0.92)),
+    rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 40px rgba(8, 14, 23, 0.14);
+  text-align: center;
+}
+
+.reward-claiming-card p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+@keyframes reward-screen-shake {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  25% {
+    transform: translate3d(-8px, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(8px, 0, 0);
+  }
+
+  75% {
+    transform: translate3d(-4px, 0, 0);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes reward-target-pulse {
+  from {
+    opacity: 0.78;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 .progress-rail {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1855,6 +2113,33 @@ p {
   .coin-icon {
     width: 20px;
     height: 20px;
+  }
+
+  .reward-status-header,
+  .reward-sequence-stars {
+    align-items: stretch;
+    justify-items: stretch;
+  }
+
+  .reward-status-header {
+    flex-direction: column;
+  }
+
+  .reward-sequence-card {
+    padding: 20px 18px;
+    border-radius: 24px;
+  }
+
+  .reward-sequence-formula {
+    gap: 6px 8px;
+  }
+
+  .reward-sequence-actions {
+    justify-content: stretch;
+  }
+
+  .reward-sequence-continue {
+    width: 100%;
   }
 
   /* Keep stacked form fields compact when rows collapse to a column on mobile. */

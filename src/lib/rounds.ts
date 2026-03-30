@@ -70,11 +70,6 @@ interface SubmitRoundGuessInput {
   difficulty: WordDifficulty;
 }
 
-export interface SubmitRoundGuessResult {
-  round: Round;
-  awardedAmount: number;
-}
-
 interface ArchiveCompletedRoundInput {
   currentUserId: string;
   roundId: string;
@@ -281,7 +276,7 @@ export async function saveRoundAttempt(
 
 export async function submitRoundGuess(
   input: SubmitRoundGuessInput,
-): Promise<SubmitRoundGuessResult> {
+): Promise<Round> {
   const client = requireSupabase();
   const guess = input.guess.trim();
   const score = scoreGuess(guess, input.correctPhrase);
@@ -296,12 +291,18 @@ export async function submitRoundGuess(
     throw new Error(`Unable to submit the guess: ${error?.message || 'Unknown error.'}`);
   }
 
-  const round = await mapRoundRow(data as unknown as RoundRow);
+  return mapRoundRow(data as unknown as RoundRow);
+}
 
-  return {
-    round,
-    awardedAmount: calculateCoinReward(score, round.difficulty),
-  };
+export async function markRoundResultsViewed(roundId: string): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await client.rpc('mark_round_results_viewed', {
+    view_round_id: roundId,
+  });
+
+  if (error) {
+    throw new Error(`Unable to mark the round results as viewed: ${error.message}`);
+  }
 }
 
 export async function archiveCompletedRound(
@@ -338,14 +339,6 @@ export async function archiveCompletedRound(
     ),
   );
 
-  if (storagePaths.length > 0) {
-    const { error: deleteError } = await client.storage.from('audio').remove(storagePaths);
-
-    if (deleteError && !isMissingStorageObjectError(deleteError.message)) {
-      throw new Error(`Unable to remove the archived audio: ${deleteError.message}`);
-    }
-  }
-
   const { data, error } = await client.rpc('archive_completed_round', {
     round_id: input.roundId,
   });
@@ -357,6 +350,14 @@ export async function archiveCompletedRound(
   const archivedRow = ((data as ArchiveCompletedRoundRow[] | null) ?? [])[0];
   if (!archivedRow) {
     throw new Error('The completed round could not be archived.');
+  }
+
+  if (storagePaths.length > 0) {
+    const { error: deleteError } = await client.storage.from('audio').remove(storagePaths);
+
+    if (deleteError && !isMissingStorageObjectError(deleteError.message)) {
+      console.warn('Unable to remove archived audio after archiving the round.', deleteError);
+    }
   }
 
   return {

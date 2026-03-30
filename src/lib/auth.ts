@@ -151,10 +151,25 @@ export async function signOut() {
 
 export async function getMyProfile(): Promise<AppProfile> {
   const client = requireSupabase();
-  const { data, error } = await client
-    .from('profiles')
-    .select('id, email, username, created_at')
-    .single();
+  const loadProfile = async () =>
+    client
+      .from('profiles')
+      .select('id, email, username, created_at')
+      .single();
+
+  let { data, error } = await loadProfile();
+
+  if (!data) {
+    const { error: repairError } = await client.rpc('ensure_current_profile');
+
+    if (repairError) {
+      throw new Error(
+        `Unable to load your profile: ${error?.message || repairError.message || 'Unknown error.'}`,
+      );
+    }
+
+    ({ data, error } = await loadProfile());
+  }
 
   if (error || !data) {
     throw new Error(`Unable to load your profile: ${error?.message || 'Unknown error.'}`);

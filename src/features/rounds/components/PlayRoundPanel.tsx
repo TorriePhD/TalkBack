@@ -3,7 +3,6 @@ import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import type { PlaybackStartKind } from '../../../components/WaveformPlayButton';
-import { WaveformLoader } from '../../../components/WaveformLoader';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { useCoins } from '../../resources/ResourceProvider';
 import { claimReward, getRoundReward } from '../../../lib/roundRewards';
@@ -815,20 +814,15 @@ export function PlayRoundPanel({
               {isArchiving
                 ? 'Continuing...'
                 : isLoadingReward
-                  ? 'loading...'
+                  ? 'Checking reward...'
                   : 'Continue thread'}
             </button>
           )}
         </div>
       </RoundRewardSequence>
     ) : round.status === 'complete' ? (
-      <div className={`reward-status-shell${isLoadingReward ? ' is-loading' : ''}`}>
-        {isLoadingReward ? (
-          <div className="reward-loading-center" aria-live="polite" role="status">
-            <WaveformLoader className="round-loader-callout-spinner" size={108} strokeWidth={4} />
-            <p>loading...</p>
-          </div>
-        ) : null}
+      <div className="reward-status-shell">
+        {isLoadingReward ? <p>Checking your reward state...</p> : null}
         {!isLoadingReward && !roundReward ? (
           <>
             <p>Reward data is missing for this round, so no BB Coin payout can be shown here.</p>

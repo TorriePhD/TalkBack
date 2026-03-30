@@ -33,13 +33,11 @@ interface ParticleRender {
   style: CSSProperties;
 }
 
-const STAR_DURATION_MS = 720;
-const DIFFICULTY_DURATION_MS = 320;
-const FORMULA_DURATION_MS = 260;
+const STAR_DURATION_MS = 1400;
+const DIFFICULTY_DURATION_MS = 520;
 const BURST_DURATION_MS = 560;
 const TARGET_MARKER_SIZE_PX = 44;
-const TOTAL_DURATION_MS =
-  STAR_DURATION_MS + DIFFICULTY_DURATION_MS + FORMULA_DURATION_MS + BURST_DURATION_MS;
+const TOTAL_DURATION_MS = STAR_DURATION_MS + DIFFICULTY_DURATION_MS + BURST_DURATION_MS;
 
 function clamp(value: number, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
@@ -127,43 +125,37 @@ export function RoundRewardSequence({
   const [burstOrigin, setBurstOrigin] = useState<Point | null>(null);
   const [targetPoint, setTargetPoint] = useState<Point | null>(null);
   const sequenceCardRef = useRef<HTMLDivElement | null>(null);
-  const formulaRef = useRef<HTMLDivElement | null>(null);
+  const coinCounterRef = useRef<HTMLDivElement | null>(null);
   const hasCompletedAnimationRef = useRef(startCompleted);
 
   const starsProgress = clamp(elapsedMs / STAR_DURATION_MS);
   const difficultyProgress = clamp((elapsedMs - STAR_DURATION_MS) / DIFFICULTY_DURATION_MS);
-  const formulaProgress = clamp(
-    (elapsedMs - STAR_DURATION_MS - DIFFICULTY_DURATION_MS) / FORMULA_DURATION_MS,
-  );
   const burstProgress = clamp(
-    (elapsedMs - STAR_DURATION_MS - DIFFICULTY_DURATION_MS - FORMULA_DURATION_MS) /
-      BURST_DURATION_MS,
+    (elapsedMs - STAR_DURATION_MS - DIFFICULTY_DURATION_MS) / BURST_DURATION_MS,
   );
   const difficultyMultiplierValue = difficultyMultiplier[reward.difficulty];
-  const displayedStarValue = reward.stars * easeOutBack(starsProgress, 1.18);
+  const starRevealCount = reward.stars === 0 ? 0 : Math.floor(starsProgress * reward.stars);
+  const starStepProgress =
+    reward.stars === 0 ? 1 : clamp(starsProgress * reward.stars - starRevealCount, 0, 1);
+  const displayedStarValue = starRevealCount;
   const isSequenceFinished = elapsedMs >= TOTAL_DURATION_MS;
-  const stageLabel =
-    isSequenceFinished
-      ? 'Reward Ready'
-      : burstProgress > 0
-        ? 'Banking BB Coins'
-        : formulaProgress > 0
-          ? 'Calculating Reward'
-          : difficultyProgress > 0
-            ? 'Locking Difficulty'
-            : 'Counting Stars';
-  const starCounterLabel =
-    starsProgress < 1 && reward.stars > 0
-      ? displayedStarValue.toFixed(1)
-      : `${reward.stars}`;
+  const difficultySlamScale = 0.84 + easeOutBack(difficultyProgress, 1.6) * 0.16;
+  const stagedRewardAmount = Math.round(
+    reward.stars + (reward.rewardAmount - reward.stars) * easeOutBack(difficultyProgress, 1.08),
+  );
   const difficultyDrop = 1 - easeOutBack(difficultyProgress, 1.34);
-  const formulaReveal = easeOutCubic(formulaProgress);
+  const starSlamStrength = Math.max(0, starRevealCount);
+  const starBounceScale = 0.88 + easeOutBack(starStepProgress, 1.45 + starSlamStrength * 0.18) * 0.32;
+  const starDrop = (1 - easeOutBack(starStepProgress, 1.45 + starSlamStrength * 0.18)) * (10 + starSlamStrength * 6);
   const targetPulseScale = 0.94 + burstProgress * 0.32;
   const particles = useMemo(() => createParticleSpecs(reward.rewardAmount), [reward.rewardAmount]);
-  const displayedCoinTotal =
-    reward.rewardAmount === 0
-      ? baseCoins
-      : baseCoins + Math.round(reward.rewardAmount * easeOutCubic(burstProgress));
+  const payoutCount =
+    burstProgress > 0
+      ? reward.rewardAmount
+      : difficultyProgress > 0
+        ? stagedRewardAmount
+        : starRevealCount;
+  const displayedCoinTotal = baseCoins + Math.round(reward.rewardAmount * easeOutCubic(burstProgress));
 
   useEffect(() => {
     if (startCompleted) {
@@ -217,7 +209,7 @@ export function RoundRewardSequence({
       return;
     }
 
-    const originElement = formulaRef.current ?? sequenceCardRef.current;
+    const originElement = coinCounterRef.current ?? sequenceCardRef.current;
     const nextOrigin = getCenterPoint(originElement);
     const nextTarget = getCoinDisplayTargetPoint();
 
@@ -285,42 +277,38 @@ export function RoundRewardSequence({
       ) : null}
 
       <div className="reward-sequence-card" ref={sequenceCardRef}>
-        <div className="reward-sequence-label">BB Coin Reward</div>
-        <div className="reward-sequence-stage">{stageLabel}</div>
-
         <div className="reward-sequence-stars">
-          <div>
-            <div className="reward-sequence-value">{starCounterLabel}</div>
-            <div className="reward-sequence-subtitle">
-              {reward.stars === 1 ? 'star earned' : 'stars earned'}
-            </div>
+          <div
+            className="reward-sequence-stars-visual"
+            style={{
+              transform: `translate3d(0, ${starDrop}px, 0) scale(${starBounceScale})`,
+            }}
+          >
+            <StarRating large label={`${reward.stars} stars`} value={displayedStarValue} />
           </div>
-          <StarRating large label={`${reward.stars} stars`} value={displayedStarValue} />
         </div>
 
         <div
           className={`reward-sequence-difficulty${difficultyProgress > 0 ? ' is-visible' : ''}`}
           style={{
             opacity: difficultyProgress === 0 ? 0 : 1,
-            transform: `translate3d(0, ${-130 * difficultyDrop}px, 0) scale(${0.92 + difficultyProgress * 0.08})`,
+            transform: `translate3d(0, ${-150 * difficultyDrop}px, 0) scale(${difficultySlamScale})`,
           }}
         >
           {getDifficultyLabel(reward.difficulty)}
         </div>
 
         <div
-          className={`reward-sequence-formula${formulaProgress > 0 ? ' is-visible' : ''}`}
-          ref={formulaRef}
+          className={`reward-sequence-formula${difficultyProgress > 0 ? ' is-visible' : ''}`}
+          ref={coinCounterRef}
           style={{
-            opacity: formulaReveal,
-            transform: `translate3d(0, ${(1 - formulaReveal) * 20}px, 0) scale(${0.96 + formulaReveal * 0.04})`,
+            opacity: difficultyProgress === 0 ? 0 : 1,
+            transform: `translate3d(0, ${(1 - easeOutCubic(difficultyProgress)) * 28}px, 0) scale(${0.94 + easeOutBack(difficultyProgress, 1.14) * 0.08})`,
           }}
         >
-          <span>{reward.stars} stars</span>
-          <span aria-hidden="true">x</span>
-          <span>{getDifficultyLabel(reward.difficulty)} x{difficultyMultiplierValue}</span>
-          <span aria-hidden="true">=</span>
-          <strong>{reward.rewardAmount.toLocaleString()} BB Coins</strong>
+          <img alt="BB coin" className="reward-sequence-coin-icon" src={`${import.meta.env.BASE_URL}bbcoin.png`} />
+          <strong>{payoutCount.toLocaleString()}</strong>
+          <span className="reward-sequence-multiplier">x{difficultyMultiplierValue}</span>
         </div>
 
         <p className="reward-sequence-caption">

@@ -1243,7 +1243,7 @@ p {
 .reward-sequence-card {
   width: 100%;
   display: grid;
-  gap: 18px;
+  gap: 24px;
   padding: 24px 22px;
   border-radius: 30px;
   border: 1px solid rgba(255, 219, 128, 0.34);
@@ -1257,56 +1257,38 @@ p {
     0 0 0 1px rgba(255, 255, 255, 0.04) inset;
 }
 
-.reward-sequence-label {
-  margin: 0;
-  color: rgba(244, 234, 204, 0.72);
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.reward-sequence-stage {
-  font-size: 0.82rem;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(244, 234, 204, 0.88);
-}
-
 .reward-sequence-stars {
   display: grid;
-  gap: 14px;
-  justify-items: start;
+  justify-items: center;
+  align-items: center;
 }
 
-.reward-sequence-value {
-  font-size: clamp(2.8rem, 8vw, 4.6rem);
-  line-height: 0.92;
-  font-weight: 900;
-  color: #fff6b4;
-  text-shadow: 0 0 22px rgba(255, 205, 78, 0.28);
+.reward-sequence-stars-visual {
+  transition: transform 95ms cubic-bezier(0.22, 1.15, 0.36, 1);
+  transform-origin: center 60%;
 }
 
-.reward-sequence-subtitle {
-  margin-top: 6px;
-  color: rgba(244, 234, 204, 0.78);
-  font-size: 0.94rem;
-  font-weight: 700;
+.reward-sequence-stars .star-rating-large {
+  gap: 18px;
+}
+
+.reward-sequence-stars .star-rating-large .star-rating-icon {
+  width: clamp(70px, 16vw, 106px);
+  height: clamp(70px, 16vw, 106px);
 }
 
 .reward-sequence-difficulty {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  justify-self: start;
+  justify-self: center;
   min-height: 0;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: #fff0b8;
-  font-size: 1rem;
+  font-size: clamp(1.15rem, 2.2vw, 1.45rem);
   font-weight: 900;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1315,9 +1297,10 @@ p {
 
 .reward-sequence-formula {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 8px 10px;
+  justify-content: center;
+  gap: 12px;
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -1327,17 +1310,32 @@ p {
 
 .reward-sequence-formula span,
 .reward-sequence-formula strong {
-  font-size: 1rem;
+  font-size: 1.32rem;
   font-weight: 800;
 }
 
 .reward-sequence-formula strong {
   color: #fff0b8;
+  font-size: clamp(2rem, 7vw, 3.2rem);
+  line-height: 0.92;
+}
+
+.reward-sequence-coin-icon {
+  width: clamp(52px, 10vw, 74px);
+  height: clamp(52px, 10vw, 74px);
+  filter: drop-shadow(0 0 16px rgba(255, 217, 107, 0.35));
+}
+
+.reward-sequence-multiplier {
+  color: rgba(175, 246, 255, 0.95);
+  font-size: clamp(1.05rem, 3vw, 1.4rem) !important;
+  font-weight: 800;
 }
 
 .reward-sequence-caption {
   margin: 0;
   color: rgba(244, 234, 204, 0.82);
+  text-align: center;
 }
 
 .reward-sequence-extra {
@@ -1383,6 +1381,27 @@ p {
 
 .reward-status-shell p {
   margin: 0;
+}
+
+.reward-page-loading {
+  min-height: clamp(320px, 58dvh, 520px);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+}
+
+.reward-page-loading-spinner {
+  width: 118px;
+  height: 118px;
+}
+
+.reward-page-loading p {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
 }
 
 .reward-sequence-total {

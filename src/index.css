@@ -1280,35 +1280,6 @@ p {
   justify-items: start;
 }
 
-.reward-sequence-stars-only {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 72px;
-}
-
-.reward-sequence-star {
-  font-size: clamp(2rem, 8vw, 3.4rem);
-  line-height: 1;
-  color: rgba(255, 230, 130, 0.3);
-  transform: translateY(18px) scale(0.6);
-  opacity: 0;
-  text-shadow: 0 0 0 rgba(255, 214, 105, 0);
-}
-
-.reward-sequence-star.is-visible {
-  color: #ffe078;
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  text-shadow:
-    0 0 16px rgba(255, 214, 105, 0.58),
-    0 2px 0 rgba(115, 72, 8, 0.4);
-}
-
-.reward-sequence-star.is-slamming {
-  animation: reward-star-slam 420ms cubic-bezier(0.18, 0.88, 0.28, 1.2);
-}
-
 .reward-sequence-value {
   font-size: clamp(2.8rem, 8vw, 4.6rem);
   line-height: 0.92;
@@ -1340,30 +1311,6 @@ p {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   box-shadow: none;
-}
-
-.reward-sequence-earned {
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
-  justify-self: start;
-  padding: 14px 18px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.reward-sequence-earned-icon {
-  width: 44px;
-  height: 44px;
-  filter: drop-shadow(0 0 10px rgba(255, 211, 102, 0.45));
-}
-
-.reward-sequence-earned strong {
-  font-size: clamp(2rem, 7vw, 3rem);
-  line-height: 1;
-  font-weight: 900;
-  color: #fff3b7;
 }
 
 .reward-sequence-formula {
@@ -1432,30 +1379,6 @@ p {
 .reward-status-shell {
   display: grid;
   gap: 14px;
-}
-
-.reward-status-shell.is-loading {
-  min-height: clamp(260px, 56vh, 420px);
-  place-items: center;
-  text-align: center;
-}
-
-.reward-loading-center {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-}
-
-.reward-loading-center .round-loader-callout-spinner {
-  width: 108px;
-  height: 108px;
-}
-
-.reward-loading-center p {
-  margin: 0;
-  text-transform: lowercase;
-  font-weight: 700;
-  letter-spacing: 0.05em;
 }
 
 .reward-status-shell p {
@@ -1570,19 +1493,6 @@ p {
 
   to {
     opacity: 1;
-  }
-}
-
-@keyframes reward-star-slam {
-  0% {
-    transform: translateY(calc(-20px * var(--star-slam-intensity, 1))) scale(1.35);
-    text-shadow: 0 0 26px rgba(255, 225, 120, 0.72);
-  }
-  55% {
-    transform: translateY(calc(16px * var(--star-slam-intensity, 1))) scale(0.92);
-  }
-  100% {
-    transform: translateY(0) scale(1);
   }
 }
 

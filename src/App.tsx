@@ -533,6 +533,10 @@ function App() {
     setIsComposingNextRound(false);
   };
 
+  const handleHomeRefresh = useCallback(async () => {
+    await refreshAppData({ silent: true });
+  }, [refreshAppData]);
+
   const handleBackFromCreateRound = () => {
     if (selectedThread?.displayRound) {
       setIsComposingNextRound(false);
@@ -799,6 +803,7 @@ function App() {
                   onCreateGame={handleCreateGame}
                   onOpenFriend={handleSelectFriend}
                   onOpenFriends={handleOpenFriends}
+                  onRefresh={handleHomeRefresh}
                 />
               ) : null}
               {view === 'friends' ? (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
+import { WaveformLoader } from '../../../components/WaveformLoader';
 import type { PlaybackStartKind } from '../../../components/WaveformPlayButton';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { useCoins } from '../../resources/ResourceProvider';
@@ -822,7 +823,12 @@ export function PlayRoundPanel({
       </RoundRewardSequence>
     ) : round.status === 'complete' ? (
       <div className="reward-status-shell">
-        {isLoadingReward ? <p>Checking your reward state...</p> : null}
+        {isLoadingReward ? (
+          <div className="reward-page-loading" aria-live="polite" role="status">
+            <WaveformLoader className="reward-page-loading-spinner" size={118} strokeWidth={4} />
+            <p>loading...</p>
+          </div>
+        ) : null}
         {!isLoadingReward && !roundReward ? (
           <>
             <p>Reward data is missing for this round, so no BB Coin payout can be shown here.</p>

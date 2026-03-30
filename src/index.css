@@ -1243,7 +1243,7 @@ p {
 .reward-sequence-card {
   width: 100%;
   display: grid;
-  gap: 22px;
+  gap: 18px;
   padding: 24px 22px;
   border-radius: 30px;
   border: 1px solid rgba(255, 219, 128, 0.34);
@@ -1257,42 +1257,56 @@ p {
     0 0 0 1px rgba(255, 255, 255, 0.04) inset;
 }
 
+.reward-sequence-label {
+  margin: 0;
+  color: rgba(244, 234, 204, 0.72);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reward-sequence-stage {
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(244, 234, 204, 0.88);
+}
+
 .reward-sequence-stars {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  min-height: 112px;
+  display: grid;
+  gap: 14px;
+  justify-items: start;
 }
 
-.reward-sequence-star {
-  font-size: clamp(2.9rem, 9.2vw, 5.7rem);
-  line-height: 1;
-  color: rgba(255, 236, 173, 0.24);
-  transform-origin: 50% 85%;
-  transition: color 220ms ease-out;
+.reward-sequence-value {
+  font-size: clamp(2.8rem, 8vw, 4.6rem);
+  line-height: 0.92;
+  font-weight: 900;
+  color: #fff6b4;
+  text-shadow: 0 0 22px rgba(255, 205, 78, 0.28);
 }
 
-.reward-sequence-star.is-lit {
-  color: #ffef8e;
-  text-shadow:
-    0 0 20px rgba(255, 200, 54, 0.6),
-    0 10px 16px rgba(0, 0, 0, 0.2);
-  animation: reward-star-slam calc(240ms + var(--slam-power, 1) * 90ms) cubic-bezier(0.22, 1, 0.36, 1);
+.reward-sequence-subtitle {
+  margin-top: 6px;
+  color: rgba(244, 234, 204, 0.78);
+  font-size: 0.94rem;
+  font-weight: 700;
 }
 
 .reward-sequence-difficulty {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  justify-self: center;
+  justify-self: start;
   min-height: 0;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: #fff0b8;
-  font-size: 1.4rem;
+  font-size: 1rem;
   font-weight: 900;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1301,9 +1315,9 @@ p {
 
 .reward-sequence-formula {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  gap: 8px 10px;
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -1313,7 +1327,7 @@ p {
 
 .reward-sequence-formula span,
 .reward-sequence-formula strong {
-  font-size: clamp(2rem, 8vw, 3.3rem);
+  font-size: 1rem;
   font-weight: 800;
 }
 
@@ -1321,10 +1335,9 @@ p {
   color: #fff0b8;
 }
 
-.reward-sequence-coin-icon {
-  width: clamp(42px, 10vw, 62px);
-  height: clamp(42px, 10vw, 62px);
-  filter: drop-shadow(0 0 10px rgba(255, 202, 80, 0.35));
+.reward-sequence-caption {
+  margin: 0;
+  color: rgba(244, 234, 204, 0.82);
 }
 
 .reward-sequence-extra {
@@ -1366,30 +1379,10 @@ p {
 .reward-status-shell {
   display: grid;
   gap: 14px;
-  min-height: 320px;
-  align-items: center;
 }
 
 .reward-status-shell p {
   margin: 0;
-}
-
-.reward-status-loading {
-  display: grid;
-  justify-items: center;
-  gap: 16px;
-  text-align: center;
-}
-
-.reward-status-loading p {
-  font-size: 1.05rem;
-  font-weight: 800;
-  text-transform: lowercase;
-}
-
-.reward-status-loading-spinner {
-  width: 120px;
-  height: 120px;
 }
 
 .reward-sequence-total {
@@ -1499,24 +1492,6 @@ p {
   }
 
   to {
-    opacity: 1;
-  }
-}
-
-@keyframes reward-star-slam {
-  0% {
-    transform: translateY(-68px) scale(0.7);
-    opacity: 0.3;
-  }
-  50% {
-    transform: translateY(22px) scale(calc(1.06 + var(--slam-power, 1) * 0.08));
-    opacity: 1;
-  }
-  74% {
-    transform: translateY(-14px) scale(0.94);
-  }
-  100% {
-    transform: translateY(0) scale(1);
     opacity: 1;
   }
 }

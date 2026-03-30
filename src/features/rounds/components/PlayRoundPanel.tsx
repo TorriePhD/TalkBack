@@ -824,7 +824,34 @@ export function PlayRoundPanel({
       <div className="reward-status-shell">
         {isLoadingReward ? <p>Checking your reward state...</p> : null}
         {!isLoadingReward && !roundReward ? (
-          <p>Reward data is missing for this round, so no BB Coin payout can be shown here.</p>
+          <>
+            <p>Reward data is missing for this round, so no BB Coin payout can be shown here.</p>
+            <div className="button-row">
+              {isRecipient ? (
+                <button
+                  className="button primary"
+                  disabled={isRewardBusy}
+                  onClick={() => {
+                    void handleRecipientContinue();
+                  }}
+                  type="button"
+                >
+                  Record next prompt
+                </button>
+              ) : (
+                <button
+                  className="button primary"
+                  disabled={isArchiving || isRewardBusy}
+                  onClick={() => {
+                    void handleArchiveRound();
+                  }}
+                  type="button"
+                >
+                  {isArchiving ? 'Continuing...' : 'Continue thread'}
+                </button>
+              )}
+            </div>
+          </>
         ) : null}
       </div>
     ) : null;

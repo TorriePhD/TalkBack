@@ -3,7 +3,9 @@ import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 
 const FULL_CIRCLE = Math.PI * 2;
 const TARGET_FRAME_MS = 1000 / 48;
 
-interface WaveformPlayButtonProps {
+export type PlaybackStartKind = 'new' | 'resume';
+
+export interface WaveformPlayButtonProps {
   src?: string;
   size?: number;
   strokeWidth?: number;
@@ -16,9 +18,11 @@ interface WaveformPlayButtonProps {
   mode?: 'playback' | 'record';
   isActive?: boolean;
   onPress?: () => void;
+  onPlayRequest?: (kind: PlaybackStartKind) => boolean | void | Promise<boolean | void>;
   activeAriaLabel?: string;
   inactiveAriaLabel?: string;
   liveStream?: MediaStream | null;
+  disabled?: boolean;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -100,9 +104,11 @@ export function WaveformPlayButton({
   mode = 'playback',
   isActive = false,
   onPress,
+  onPlayRequest,
   activeAriaLabel = 'Stop recording',
   inactiveAriaLabel = 'Start recording',
   liveStream = null,
+  disabled = false,
 }: WaveformPlayButtonProps) {
   const gradientId = useId();
   const pathRef = useRef<SVGPathElement | null>(null);
@@ -117,6 +123,7 @@ export function WaveformPlayButton({
   const motionProgressRef = useRef(0);
   const lastFrameAtRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isAuthorizingPlay, setIsAuthorizingPlay] = useState(false);
   const prefersReducedMotion = usePrefersReducedMotion();
 
   const segmentCount = useMemo(() => (prefersReducedMotion ? 96 : 180), [prefersReducedMotion]);
@@ -343,11 +350,28 @@ export function WaveformPlayButton({
 
   const togglePlayback = async () => {
     const audio = audioRef.current;
-    if (!audio) {
+    if (!audio || disabled || isAuthorizingPlay) {
       return;
     }
 
     if (audio.paused || audio.ended) {
+      const playbackStartKind: PlaybackStartKind =
+        audio.currentTime > 0.05 && !audio.ended ? 'resume' : 'new';
+
+      if (onPlayRequest) {
+        setIsAuthorizingPlay(true);
+
+        try {
+          const playWasAuthorized = await onPlayRequest(playbackStartKind);
+
+          if (playWasAuthorized === false) {
+            return;
+          }
+        } finally {
+          setIsAuthorizingPlay(false);
+        }
+      }
+
       initializePlaybackAudioGraph();
 
       if (audioContextRef.current?.state === 'suspended') {
@@ -395,6 +419,7 @@ export function WaveformPlayButton({
     <button
       aria-label={mode === 'playback' ? (isPlaying ? 'Pause audio' : 'Play audio') : showActiveState ? activeAriaLabel : inactiveAriaLabel}
       className={composedClassName}
+      disabled={disabled || isAuthorizingPlay}
       onClick={() => {
         if (mode === 'record') {
           onPress?.();

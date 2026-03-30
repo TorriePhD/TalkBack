@@ -2,13 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
-import { StarRating } from '../../../components/StarRating';
+import type { PlaybackStartKind } from '../../../components/WaveformPlayButton';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { useCoins } from '../../resources/ResourceProvider';
 import { claimReward, getRoundReward } from '../../../lib/roundRewards';
-import { markRoundResultsViewed, saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
+import {
+  consumeRoundListen,
+  extraListenCost,
+  freeListenLimitByDifficulty,
+  getRoundListenState,
+  markRoundResultsViewed,
+  saveRoundAttempt,
+  submitRoundGuess,
+} from '../../../lib/rounds';
 import { getRoundSummary, getScorePresentation } from '../scorePresentation';
-import type { Round, RoundReward } from '../types';
+import type { Round, RoundListenState, RoundReward } from '../types';
 import { RoundRewardSequence } from './RoundRewardSequence';
 
 interface PlayRoundPanelProps {
@@ -121,10 +129,9 @@ function setStoredCompletedRoundStage(
   window.sessionStorage.setItem(getCompletedRoundStageStorageKey(userId, roundId), stage);
 }
 
-function formatDifficultyLabel(difficulty: RoundReward['difficulty']) {
-  return difficulty.toUpperCase();
+function formatListenLabel(count: number) {
+  return `${count} listen${count === 1 ? '' : 's'}`;
 }
-
 export function PlayRoundPanel({
   currentUserId,
   round,
@@ -147,8 +154,9 @@ export function PlayRoundPanel({
   const [isClaimingReward, setIsClaimingReward] = useState(false);
   const [completedRoundStage, setCompletedRoundStage] = useState<CompletedRoundStage>('review');
   const [roundReward, setRoundReward] = useState<RoundReward | null>(null);
-  const [localCoinGain, setLocalCoinGain] = useState(0);
-  const [displayedTotalCoins, setDisplayedTotalCoins] = useState(0);
+  const [listenState, setListenState] = useState<RoundListenState | null>(null);
+  const [isLoadingListenState, setIsLoadingListenState] = useState(false);
+  const [isAuthorizingListenPlayback, setIsAuthorizingListenPlayback] = useState(false);
   const [hasConfirmedListen, setHasConfirmedListen] = useState(false);
   const lastSavedAttemptBlobRef = useRef<Blob | null>(null);
   const rewardBaseCoinsRef = useRef(0);
@@ -179,8 +187,9 @@ export function PlayRoundPanel({
           : getStoredCompletedRoundStage(currentUserId, round.id) ?? 'review'
         : 'review',
     );
-    setLocalCoinGain(0);
-    setDisplayedTotalCoins(coins);
+    setListenState(null);
+    setIsLoadingListenState(false);
+    setIsAuthorizingListenPlayback(false);
     rewardBaseCoinsRef.current = coins;
     loadedRewardRoundIdRef.current = null;
     setCoinPreview(null);
@@ -210,6 +219,22 @@ export function PlayRoundPanel({
   const isCompletedRound = round?.status === 'complete';
   const isRewardStepOpen = Boolean(isCompletedRound && (isRecipient || completedRoundStage === 'reward'));
   const isReviewerRecordingStep = Boolean(isCompletedRound && !isRecipient && completedRoundStage === 'review');
+  const includedFreeListenLimit = round ? freeListenLimitByDifficulty[round.difficulty] : 0;
+  const effectiveFreeListenLimit = listenState?.freeLimit ?? includedFreeListenLimit;
+  const listenUsageCount = listenState?.listenCount ?? 0;
+  const paidListenCount =
+    listenState?.paidListenCount ?? Math.max(0, listenUsageCount - effectiveFreeListenLimit);
+  const freeListenCountRemaining = Math.max(0, effectiveFreeListenLimit - listenUsageCount);
+  const nextListenReplayCost = listenState?.nextPlayCost ?? extraListenCost;
+  const listenPlaybackHelperText = !round
+    ? ''
+    : isLoadingListenState
+      ? 'Checking your free replay limit.'
+      : freeListenCountRemaining > 0
+        ? `${formatListenLabel(freeListenCountRemaining)} free out of ${formatListenLabel(effectiveFreeListenLimit)} remaining. Extra replays cost ${nextListenReplayCost} BB Coins each.`
+        : paidListenCount > 0
+          ? `Free listens are used up. You have already bought ${formatListenLabel(paidListenCount)}. Each new replay costs ${nextListenReplayCost} BB Coins.`
+          : `Free listens are used up. Each new replay costs ${nextListenReplayCost} BB Coins.`;
 
   const canSubmitGuess = useMemo(
     () =>
@@ -225,8 +250,6 @@ export function PlayRoundPanel({
 
   const updateRewardPreview = useCallback(
     (nextDisplayedCoins: number) => {
-      setDisplayedTotalCoins(nextDisplayedCoins);
-      setLocalCoinGain(Math.max(0, nextDisplayedCoins - rewardBaseCoinsRef.current));
       setCoinPreview(nextDisplayedCoins);
     },
     [setCoinPreview],
@@ -236,18 +259,15 @@ export function PlayRoundPanel({
     async (rewardToSettle: RoundReward, options: { claimedNow: boolean; currentBalance: number | null }) => {
       if (options.currentBalance !== null) {
         setCoinBalance(options.currentBalance);
-        setDisplayedTotalCoins(options.currentBalance);
       } else {
         try {
-          const refreshedCoins = await refreshCoins();
-          setDisplayedTotalCoins(refreshedCoins);
+          await refreshCoins();
         } catch (refreshError) {
           console.warn('Unable to refresh BB Coins after claiming a round reward.', refreshError);
         }
       }
 
       setRoundReward({ ...rewardToSettle, claimed: true });
-      setLocalCoinGain(0);
       setIsAnimatingReward(false);
       setIsAwaitingRewardContinue(false);
       setIsClaimingReward(false);
@@ -282,8 +302,6 @@ export function PlayRoundPanel({
 
         if (!claimResult) {
           setRoundReward(null);
-          setLocalCoinGain(0);
-          setDisplayedTotalCoins(rewardBaseCoinsRef.current);
           setIsClaimingReward(false);
           setCoinPreview(null);
           clearRewardAnimationState(currentUserId, rewardToClaim.roundId);
@@ -299,8 +317,6 @@ export function PlayRoundPanel({
         setIsAwaitingRewardContinue(true);
         setIsClaimingReward(false);
         setCoinPreview(null);
-        setDisplayedTotalCoins(rewardBaseCoinsRef.current);
-        setLocalCoinGain(0);
         setError(
           caughtError instanceof Error
             ? caughtError.message
@@ -396,6 +412,45 @@ export function PlayRoundPanel({
   }, [currentUserId, isRecipient, onUpdateRound, recorder.audioBlob, recorder.isRecording, round]);
 
   useEffect(() => {
+    if (!round || !isRecipient || round.status !== 'waiting_for_attempt') {
+      setListenState(null);
+      setIsLoadingListenState(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadListenState = async () => {
+      setIsLoadingListenState(true);
+
+      try {
+        const nextListenState = await getRoundListenState(round.id);
+
+        if (cancelled) {
+          return;
+        }
+
+        setListenState(nextListenState);
+        setCoinBalance(nextListenState.currentBalance);
+      } catch (listenStateError) {
+        if (!cancelled) {
+          console.warn('Unable to load the round listen state.', listenStateError);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingListenState(false);
+        }
+      }
+    };
+
+    void loadListenState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isRecipient, round?.id, round?.status, setCoinBalance]);
+
+  useEffect(() => {
     if (!round || round.status !== 'complete' || !currentUserId || isLoadingCoins || !isRewardStepOpen) {
       return;
     }
@@ -427,8 +482,6 @@ export function PlayRoundPanel({
 
         setRoundReward(reward);
         rewardBaseCoinsRef.current = coins;
-        setDisplayedTotalCoins(coins);
-        setLocalCoinGain(0);
 
         if (!reward) {
           setCoinPreview(null);
@@ -507,16 +560,7 @@ export function PlayRoundPanel({
   const showRewardPage = round.status === 'complete' && (isRecipient || completedRoundStage === 'reward');
   const rewardResultSummary =
     round.status === 'complete' && scorePresentation ? (
-      <div className="result-box reward-result-box">
-        {scorePresentation.starCount === null ? (
-          <p className={`score-mark tone-${scorePresentation.tone}`}>{scorePresentation.starLabel}</p>
-        ) : (
-          <StarRating
-            label={scorePresentation.starLabel}
-            large
-            value={scorePresentation.starCount}
-          />
-        )}
+      <div className="reward-reveal-details">
         <p>
           <strong>{isRecipient ? 'You guessed:' : 'You said:'}</strong>{' '}
           {isRecipient ? round.guess || 'No guess submitted' : round.correctPhrase}
@@ -526,15 +570,6 @@ export function PlayRoundPanel({
           {isRecipient ? round.correctPhrase : round.guess || 'No guess submitted'}
         </p>
       </div>
-    ) : null;
-  const rewardReferenceAudioCard =
-    isRecipient && round.status === 'complete' ? (
-      <AudioPlayerCard
-        title="Original phrase clip"
-        description="Replay the forward clip if you want to compare it to your guess."
-        blob={round.originalAudioBlob}
-        remoteUrl={round.originalAudioUrl}
-      />
     ) : null;
   const headerEyebrow = isRecipient
     ? recipientStage === 'reveal'
@@ -563,6 +598,7 @@ export function PlayRoundPanel({
       : showRewardPage
         ? 'This screen settles your BB Coin reward for the round.'
         : (roundSummary?.description ?? '');
+  const roundScreenClassName = showRewardPage ? 'round-screen round-screen-reward' : 'surface round-screen';
 
   const handleSubmitGuess = async () => {
     const nextGuess = guess.trim();
@@ -598,6 +634,45 @@ export function PlayRoundPanel({
       setIsSubmittingGuess(false);
     }
   };
+
+  const handleListenPlaybackRequest = useCallback(
+    async (playbackStartKind: PlaybackStartKind) => {
+      if (playbackStartKind === 'resume') {
+        return true;
+      }
+
+      if (!round || round.recipientId !== currentUserId) {
+        return false;
+      }
+
+      setError(null);
+      setInfo(null);
+      setIsAuthorizingListenPlayback(true);
+
+      try {
+        const nextListenState = await consumeRoundListen(round.id);
+        setListenState(nextListenState);
+        setCoinBalance(nextListenState.currentBalance);
+        setCoinPreview(null);
+
+        if (nextListenState.charged) {
+          setInfo(`Extra replay unlocked. -${nextListenState.nextPlayCost} BB Coins.`);
+        }
+
+        return true;
+      } catch (caughtError) {
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : 'Unable to authorize this replay.',
+        );
+        return false;
+      } finally {
+        setIsAuthorizingListenPlayback(false);
+      }
+    },
+    [currentUserId, round, setCoinBalance, setCoinPreview],
+  );
 
   const handleReadyToImitate = async () => {
     await recorder.prepareRecording();
@@ -698,90 +773,73 @@ export function PlayRoundPanel({
   );
 
   const rewardStatusCard =
-    round.status === 'complete' && shouldShowRewardSequence && roundReward ? (
+    round.status === 'complete' && roundReward ? (
       <RoundRewardSequence
         baseCoins={rewardBaseCoinsRef.current}
         onAnimationComplete={() => handleRewardAnimationComplete(roundReward)}
         onDisplayedCoinsChange={updateRewardPreview}
         reward={roundReward}
-        startCompleted={isAwaitingRewardContinue}
-      />
-    ) : round.status === 'complete' ? (
-      <div className="result-box reward-status-box">
-        {!shouldShowRewardSequence ? (
-          <div className="reward-status-header">
-          <div>
-            <strong>BB Coin reward</strong>
-            <p>
-              {isRecipient
-                ? 'This reward settles when you continue from this results screen.'
-                : 'Your reward settles here independently from your friend’s timeline.'}
-            </p>
-          </div>
-          {roundReward ? (
-            <span className={`badge ${roundReward.claimed ? 'complete' : 'attempted'}`}>
-              {roundReward.claimed ? 'Claimed' : isClaimingReward ? 'Locking in' : 'Pending'}
-            </span>
-          ) : null}
-          </div>
+        startCompleted={!shouldShowRewardSequence || isAwaitingRewardContinue}
+      >
+        {rewardResultSummary}
+        {isRecipient ? (
+          <AudioPlayerCard
+            title="Original phrase clip"
+            description="Replay the forward clip if you want to compare it to your guess."
+            blob={round.originalAudioBlob}
+            remoteUrl={round.originalAudioUrl}
+          />
         ) : null}
-
-        {isLoadingReward ? <p>Checking your reward state...</p> : null}
-
-        {!isLoadingReward && roundReward ? (
-          shouldShowRewardSequence ? (
-            <RoundRewardSequence
-              baseCoins={rewardBaseCoinsRef.current}
-              onAnimationComplete={() => handleRewardAnimationComplete(roundReward)}
-              onDisplayedCoinsChange={updateRewardPreview}
-              reward={roundReward}
-              startCompleted={isAwaitingRewardContinue}
-            />
+        <div className="button-row">
+          {isRecipient ? (
+            <button
+              className="button primary"
+              disabled={isRewardBusy}
+              onClick={() => {
+                void handleRecipientContinue();
+              }}
+              type="button"
+            >
+              Record next prompt
+            </button>
           ) : (
-          <>
-            <div className="reward-status-metrics">
-              <span className="reward-status-pill">{roundReward.stars} stars</span>
-              <span className="reward-status-pill">{formatDifficultyLabel(roundReward.difficulty)}</span>
-              <span className="reward-status-pill">
-                +{roundReward.rewardAmount.toLocaleString()} BB Coins
-              </span>
-            </div>
-            <p>
-              <strong>Wallet total:</strong> {displayedTotalCoins.toLocaleString()} BB Coins
-              {localCoinGain > 0 ? ` (+${localCoinGain.toLocaleString()} in motion)` : ''}
-            </p>
-            <p>
-              {roundReward.claimed
-                ? 'This reward has already been collected for your account.'
-                : isClaimingReward
-                    ? 'Finalizing your BB Coins...'
-                    : 'Continue below to bank this reward.'}
-            </p>
-          </>
-          )
-        ) : null}
-
+            <button
+              className="button primary"
+              disabled={isArchiving || isRewardBusy || isLoadingReward}
+              onClick={() => {
+                void handleArchiveRound();
+              }}
+              type="button"
+            >
+              {isArchiving
+                ? 'Continuing...'
+                : isLoadingReward
+                  ? 'Checking reward...'
+                  : 'Continue thread'}
+            </button>
+          )}
+        </div>
+      </RoundRewardSequence>
+    ) : round.status === 'complete' ? (
+      <div className="reward-status-shell">
+        {isLoadingReward ? <p>Checking your reward state...</p> : null}
         {!isLoadingReward && !roundReward ? (
           <p>Reward data is missing for this round, so no BB Coin payout can be shown here.</p>
-        ) : null}
-
-        {!shouldShowRewardSequence && !isRecipient && round.status === 'complete' ? (
-          <p className="reward-status-note">
-            Continue thread unlocks only after both players have opened the results screen.
-          </p>
         ) : null}
       </div>
     ) : null;
 
   return (
-    <section className="surface round-screen">
-      <div className="round-screen-header">
-        <div className="round-screen-copy">
-          <div className="eyebrow">{headerEyebrow}</div>
-          <h2>{headerTitle}</h2>
-          <p>{headerDescription}</p>
+    <section className={roundScreenClassName}>
+      {!showRewardPage ? (
+        <div className="round-screen-header">
+          <div className="round-screen-copy">
+            <div className="eyebrow">{headerEyebrow}</div>
+            <h2>{headerTitle}</h2>
+            <p>{headerDescription}</p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {isRecipient ? (
         <div className="round-screen-body">
@@ -789,13 +847,17 @@ export function PlayRoundPanel({
             <div className="round-screen-step">
               <AudioPlayerCard
                 title="Reversed prompt"
-                description="Replay this clip until you are ready to imitate it."
+                description={`You get ${formatListenLabel(effectiveFreeListenLimit)} for free. Extra replays cost ${nextListenReplayCost} BB Coins each.`}
                 blob={round.reversedAudioBlob}
+                onPlayRequest={handleListenPlaybackRequest}
+                playButtonDisabled={isAuthorizingListenPlayback}
                 remoteUrl={round.reversedAudioUrl}
               />
 
               <div className="helper-text round-screen-helper">
-                Nothing else opens until you confirm you are ready to record.
+                {isAuthorizingListenPlayback
+                  ? 'Authorizing this replay and updating your BB Coin balance.'
+                  : `${listenPlaybackHelperText} Nothing else opens until you confirm you are ready to record.`}
               </div>
             </div>
           ) : null}
@@ -860,9 +922,7 @@ export function PlayRoundPanel({
 
           {recipientStage === 'reveal' && scorePresentation ? (
             <div className="round-screen-step reward-stage-step">
-              {rewardResultSummary}
               {rewardStatusCard}
-              {rewardReferenceAudioCard}
             </div>
           ) : null}
         </div>
@@ -916,7 +976,6 @@ export function PlayRoundPanel({
 
               {showRewardPage ? (
                 <>
-                  {rewardResultSummary}
                   {rewardStatusCard}
                 </>
               ) : null}
@@ -930,6 +989,7 @@ export function PlayRoundPanel({
           <div className="button-row">
             <button
               className="button primary"
+              disabled={isAuthorizingListenPlayback || recorder.isPreparing}
               onClick={() => {
                 void handleReadyToImitate();
               }}
@@ -955,21 +1015,6 @@ export function PlayRoundPanel({
           </div>
         ) : null}
 
-        {isRecipient && recipientStage === 'reveal' ? (
-          <div className="button-row">
-            <button
-              className="button primary"
-              disabled={isRewardBusy}
-              onClick={() => {
-                void handleRecipientContinue();
-              }}
-              type="button"
-            >
-              Record next prompt
-            </button>
-          </div>
-        ) : null}
-
         {!isRecipient && showSenderRecordingReview ? (
           <div className="button-row">
             <button
@@ -982,24 +1027,6 @@ export function PlayRoundPanel({
           </div>
         ) : null}
 
-        {!isRecipient && showRewardPage ? (
-          <div className="button-row">
-            <button
-              className="button primary"
-              disabled={isArchiving || isRewardBusy || isLoadingReward}
-              onClick={() => {
-                void handleArchiveRound();
-              }}
-              type="button"
-            >
-              {isArchiving
-                ? 'Continuing...'
-                : isLoadingReward
-                  ? 'Checking reward...'
-                  : 'Continue thread'}
-            </button>
-          </div>
-        ) : null}
       </div>
 
       <div className="stack">

@@ -1,5 +1,6 @@
 import type { Round } from '../features/rounds/types';
 import type { ArchiveCompletedRoundSummary } from '../features/rounds/types';
+import type { RoundListenState } from '../features/rounds/types';
 import type { RoundStarCount } from '../features/rounds/types';
 import { scoreGuess } from '../features/rounds/utils';
 import { computeDifficulty, normalizePackText, type WordDifficulty } from '../utils/difficulty';
@@ -88,11 +89,30 @@ interface ArchiveCompletedRoundRow {
   last_completed_at: string | null;
 }
 
+interface RoundListenStateRow {
+  round_id: string;
+  user_id: string;
+  listen_count: number;
+  paid_listen_count: number;
+  free_limit: number;
+  next_play_cost: number;
+  current_balance: number;
+  charged: boolean;
+}
+
 export const difficultyMultiplier: Record<WordDifficulty, number> = {
   easy: 1,
   medium: 2,
   hard: 3,
 };
+
+export const freeListenLimitByDifficulty: Record<WordDifficulty, number> = {
+  easy: 2,
+  medium: 3,
+  hard: 4,
+};
+
+export const extraListenCost = 5;
 
 function requireSupabase() {
   if (!supabase) {
@@ -134,6 +154,19 @@ export function scoreToStars(score: number | null): RoundStarCount {
 
 export function calculateCoinReward(score: number | null, difficulty: WordDifficulty) {
   return scoreToStars(score) * difficultyMultiplier[difficulty];
+}
+
+function mapRoundListenStateRow(row: RoundListenStateRow): RoundListenState {
+  return {
+    roundId: row.round_id,
+    userId: row.user_id,
+    listenCount: row.listen_count,
+    paidListenCount: row.paid_listen_count,
+    freeLimit: row.free_limit,
+    nextPlayCost: row.next_play_cost,
+    currentBalance: row.current_balance,
+    charged: row.charged,
+  };
 }
 
 async function mapRoundRow(row: RoundRow): Promise<Round> {
@@ -303,6 +336,44 @@ export async function markRoundResultsViewed(roundId: string): Promise<void> {
   if (error) {
     throw new Error(`Unable to mark the round results as viewed: ${error.message}`);
   }
+}
+
+export async function getRoundListenState(roundId: string): Promise<RoundListenState> {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('get_round_listen_state', {
+    listen_round_id: roundId,
+  });
+
+  if (error) {
+    throw new Error(`Unable to load the round listen state: ${error.message}`);
+  }
+
+  const listenStateRow = (Array.isArray(data) ? data[0] : data) as RoundListenStateRow | null;
+
+  if (!listenStateRow) {
+    throw new Error('Unable to load the round listen state.');
+  }
+
+  return mapRoundListenStateRow(listenStateRow);
+}
+
+export async function consumeRoundListen(roundId: string): Promise<RoundListenState> {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('consume_round_listen', {
+    listen_round_id: roundId,
+  });
+
+  if (error) {
+    throw new Error(`Unable to authorize round playback: ${error.message}`);
+  }
+
+  const listenStateRow = (Array.isArray(data) ? data[0] : data) as RoundListenStateRow | null;
+
+  if (!listenStateRow) {
+    throw new Error('Unable to authorize round playback.');
+  }
+
+  return mapRoundListenStateRow(listenStateRow);
 }
 
 export async function archiveCompletedRound(

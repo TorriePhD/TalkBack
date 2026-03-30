@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { StarRating } from '../../../components/StarRating';
 import { difficultyMultiplier } from '../../../lib/rounds';
 import type { RoundReward } from '../types';
@@ -9,6 +9,7 @@ interface RoundRewardSequenceProps {
   onDisplayedCoinsChange: (amount: number) => void;
   onAnimationComplete?: () => void;
   startCompleted?: boolean;
+  children?: ReactNode;
 }
 
 interface Point {
@@ -120,6 +121,7 @@ export function RoundRewardSequence({
   onDisplayedCoinsChange,
   onAnimationComplete,
   startCompleted = false,
+  children,
 }: RoundRewardSequenceProps) {
   const [elapsedMs, setElapsedMs] = useState(startCompleted ? TOTAL_DURATION_MS : 0);
   const [burstOrigin, setBurstOrigin] = useState<Point | null>(null);
@@ -162,7 +164,6 @@ export function RoundRewardSequence({
     reward.rewardAmount === 0
       ? baseCoins
       : baseCoins + Math.round(reward.rewardAmount * easeOutCubic(burstProgress));
-  const displayedCoinGain = Math.max(0, displayedCoinTotal - baseCoins);
 
   useEffect(() => {
     if (startCompleted) {
@@ -284,7 +285,7 @@ export function RoundRewardSequence({
       ) : null}
 
       <div className="reward-sequence-card" ref={sequenceCardRef}>
-        <div className="eyebrow">BB Coin Reward</div>
+        <div className="reward-sequence-label">BB Coin Reward</div>
         <div className="reward-sequence-stage">{stageLabel}</div>
 
         <div className="reward-sequence-stars">
@@ -322,27 +323,17 @@ export function RoundRewardSequence({
           <strong>{reward.rewardAmount.toLocaleString()} BB Coins</strong>
         </div>
 
-        <div className="reward-sequence-total">
-          <span className="reward-sequence-total-label">Wallet total</span>
-          <strong className="reward-sequence-total-value">
-            {displayedCoinTotal.toLocaleString()} BB Coins
-          </strong>
-          {displayedCoinGain > 0 ? (
-            <span className="reward-sequence-total-gain">
-              +{displayedCoinGain.toLocaleString()} in motion
-            </span>
-          ) : null}
-        </div>
-
         <p className="reward-sequence-caption">
           {isSequenceFinished
             ? reward.rewardAmount > 0
-              ? 'Your payout is ready. Use the action below the round to continue.'
-              : 'No BB Coins were earned this round. Use the action below the round to continue.'
+              ? 'Your payout is ready. Continue when you are set.'
+              : 'Round complete. Continue when you are ready.'
             : reward.rewardAmount > 0
               ? 'Watch the payout lock in, then continue to bank it.'
-              : 'This round banks no BB Coins, but the result still gets locked for your profile.'}
+              : 'Locking the result for your profile.'}
         </p>
+
+        {children ? <div className="reward-sequence-extra">{children}</div> : null}
       </div>
 
       {!isSequenceFinished

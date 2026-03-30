@@ -1,11 +1,13 @@
 import { useObjectUrl } from '../audio/hooks/useObjectUrl';
-import { WaveformPlayButton } from './WaveformPlayButton';
+import { WaveformPlayButton, type WaveformPlayButtonProps } from './WaveformPlayButton';
 
 interface AudioPlayerCardProps {
   title: string;
   description: string;
   blob?: Blob | null;
   remoteUrl?: string | null;
+  playButtonDisabled?: boolean;
+  onPlayRequest?: WaveformPlayButtonProps['onPlayRequest'];
 }
 
 export function AudioPlayerCard({
@@ -13,6 +15,8 @@ export function AudioPlayerCard({
   description,
   blob,
   remoteUrl,
+  playButtonDisabled = false,
+  onPlayRequest,
 }: AudioPlayerCardProps) {
   const objectUrl = useObjectUrl(blob);
   const src = objectUrl ?? remoteUrl ?? null;
@@ -27,7 +31,13 @@ export function AudioPlayerCard({
       <p>{description}</p>
       {src ? (
         <div className="audio-card-player-wrap">
-          <WaveformPlayButton className="audio-card-player" size={86} src={src} />
+          <WaveformPlayButton
+            className="audio-card-player"
+            disabled={playButtonDisabled}
+            onPlayRequest={onPlayRequest}
+            size={86}
+            src={src}
+          />
         </div>
       ) : (
         <div className="empty-state compact-empty">No audio available yet.</div>

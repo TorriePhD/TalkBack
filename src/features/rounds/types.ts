@@ -29,6 +29,17 @@ export interface RoundReward {
   createdAt: string;
 }
 
+export interface RoundListenState {
+  roundId: string;
+  userId: string;
+  listenCount: number;
+  paidListenCount: number;
+  freeLimit: number;
+  nextPlayCost: number;
+  currentBalance: number;
+  charged: boolean;
+}
+
 export interface Round {
   id: string;
   createdAt: string;

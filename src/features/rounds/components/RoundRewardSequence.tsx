@@ -34,8 +34,6 @@ interface ParticleRender {
 }
 
 const STAR_DURATION_MS = 720;
-const STAR_STEP_DELAY_MS = 170;
-const STAR_SLAM_DURATION_MS = 410;
 const DIFFICULTY_DURATION_MS = 320;
 const FORMULA_DURATION_MS = 260;
 const BURST_DURATION_MS = 560;
@@ -142,14 +140,7 @@ export function RoundRewardSequence({
       BURST_DURATION_MS,
   );
   const difficultyMultiplierValue = difficultyMultiplier[reward.difficulty];
-  const maxStars = 3;
-  const starPhaseCoins = Math.round(reward.stars * easeOutCubic(starsProgress));
-  const multiplierProgress = easeOutCubic(
-    clamp((elapsedMs - STAR_DURATION_MS) / (DIFFICULTY_DURATION_MS + FORMULA_DURATION_MS)),
-  );
-  const displayedEarnedCoins = Math.round(
-    starPhaseCoins + (reward.rewardAmount - starPhaseCoins) * multiplierProgress,
-  );
+  const displayedStarValue = reward.stars * easeOutBack(starsProgress, 1.18);
   const isSequenceFinished = elapsedMs >= TOTAL_DURATION_MS;
   const stageLabel =
     isSequenceFinished
@@ -161,6 +152,10 @@ export function RoundRewardSequence({
           : difficultyProgress > 0
             ? 'Locking Difficulty'
             : 'Counting Stars';
+  const starCounterLabel =
+    starsProgress < 1 && reward.stars > 0
+      ? displayedStarValue.toFixed(1)
+      : `${reward.stars}`;
   const difficultyDrop = 1 - easeOutBack(difficultyProgress, 1.34);
   const formulaReveal = easeOutCubic(formulaProgress);
   const targetPulseScale = 0.94 + burstProgress * 0.32;
@@ -294,43 +289,13 @@ export function RoundRewardSequence({
         <div className="reward-sequence-stage">{stageLabel}</div>
 
         <div className="reward-sequence-stars">
-          <div className="reward-sequence-star-row" aria-label={`${reward.stars} stars`} role="img">
-            {Array.from({ length: maxStars }, (_, index) => {
-              const isEarned = index < reward.stars;
-              const starProgress = clamp(
-                (elapsedMs - STAR_STEP_DELAY_MS * index) / STAR_SLAM_DURATION_MS,
-              );
-              const slamPower = 1.08 + index * 0.2;
-              const slamProgress = easeOutBack(starProgress, slamPower);
-              const dropDistance = 86 + index * 52;
-              const scale = 0.76 + slamProgress * (0.26 + index * 0.04);
-              const opacity = isEarned ? clamp(starProgress * 1.35) : 0.22;
-
-              return (
-                <span
-                  className={`reward-sequence-star${isEarned && starProgress >= 0.96 ? ' is-earned' : ''}`}
-                  key={`reward-star-${index}`}
-                  style={{
-                    opacity,
-                    transform: isEarned
-                      ? `translate3d(0, ${(-1 + slamProgress) * dropDistance}px, 0) scale(${scale})`
-                      : 'scale(0.88)',
-                  }}
-                >
-                  <StarRating label={undefined} large value={isEarned ? 1 : 0} max={1} />
-                </span>
-              );
-            })}
+          <div>
+            <div className="reward-sequence-value">{starCounterLabel}</div>
+            <div className="reward-sequence-subtitle">
+              {reward.stars === 1 ? 'star earned' : 'stars earned'}
+            </div>
           </div>
-          <div className="reward-sequence-coin-counter" aria-live="polite">
-            <img
-              alt=""
-              aria-hidden="true"
-              className="reward-sequence-coin-icon"
-              src={`${import.meta.env.BASE_URL}bbcoin.png`}
-            />
-            <strong>{displayedEarnedCoins.toLocaleString()}</strong>
-          </div>
+          <StarRating large label={`${reward.stars} stars`} value={displayedStarValue} />
         </div>
 
         <div

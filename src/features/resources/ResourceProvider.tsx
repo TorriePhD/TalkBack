@@ -16,7 +16,7 @@ function clampAmount(amount: number) {
     return 0;
   }
 
-  return Math.max(0, Math.floor(amount));
+  return Math.floor(amount);
 }
 
 export function ResourceProvider({
@@ -86,7 +86,7 @@ export function ResourceProvider({
         return () => undefined;
       }
 
-      setCoinCount((currentAmount) => currentAmount + safeAmount);
+      setCoinCount((currentAmount) => Math.max(0, currentAmount + safeAmount));
 
       return () => {
         setCoinCount((currentAmount) => Math.max(0, currentAmount - safeAmount));

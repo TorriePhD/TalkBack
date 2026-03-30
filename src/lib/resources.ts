@@ -32,3 +32,33 @@ export async function getResourceAmount(userId: string, resourceType: ResourceTy
 export async function getCoins(userId: string) {
   return getResourceAmount(userId, RESOURCE_TYPES.BB_COIN);
 }
+
+interface SpendResourceResult {
+  amount: number;
+}
+
+export async function spendResource(userId: string, resourceType: ResourceType, amount: number) {
+  const client = requireSupabase();
+  const safeAmount = Math.floor(amount);
+
+  if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
+    throw new Error('Spend amount must be greater than zero.');
+  }
+
+  const { data, error } = await client.rpc('spend_resource', {
+    uid: userId,
+    rtype: resourceType,
+    amt: safeAmount,
+  });
+
+  if (error) {
+    throw new Error(`Unable to spend resource balance: ${error.message}`);
+  }
+
+  const parsed = data as SpendResourceResult | null;
+  return parsed?.amount ?? 0;
+}
+
+export async function spendCoins(userId: string, amount: number) {
+  return spendResource(userId, RESOURCE_TYPES.BB_COIN, amount);
+}

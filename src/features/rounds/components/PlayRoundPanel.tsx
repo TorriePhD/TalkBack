@@ -5,6 +5,7 @@ import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import { StarRating } from '../../../components/StarRating';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { useCoins } from '../../resources/ResourceProvider';
+import { spendCoins } from '../../resources/resourceApi';
 import { calculateCoinReward, saveRoundAttempt, submitRoundGuess } from '../../../lib/rounds';
 import { getRoundSummary, getScorePresentation } from '../scorePresentation';
 import { scoreGuess } from '../utils';
@@ -20,6 +21,14 @@ interface PlayRoundPanelProps {
 }
 
 type RecipientStage = 'listen' | 'record' | 'guess' | 'reveal';
+
+const EXTRA_REPLAY_COST = 5;
+
+const INCLUDED_PLAYS_BY_DIFFICULTY: Record<Round['difficulty'], number> = {
+  easy: 2,
+  medium: 3,
+  hard: 4,
+};
 
 function getRecipientStage(options: {
   hasAttempt: boolean;
@@ -75,7 +84,7 @@ export function PlayRoundPanel({
   onUpdateRound,
 }: PlayRoundPanelProps) {
   const recorder = useAudioRecorder({ preparedStreamIdleMs: 0 });
-  const { applyOptimisticCoinDelta, refreshCoins } = useCoins();
+  const { applyOptimisticCoinDelta, coins, refreshCoins } = useCoins();
   const [guess, setGuess] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -83,6 +92,9 @@ export function PlayRoundPanel({
   const [isSubmittingGuess, setIsSubmittingGuess] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [hasConfirmedListen, setHasConfirmedListen] = useState(false);
+  const [listenPlayCount, setListenPlayCount] = useState(0);
+  const [extraPurchasedListenCount, setExtraPurchasedListenCount] = useState(0);
+  const [isBuyingReplay, setIsBuyingReplay] = useState(false);
   const lastSavedAttemptBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
@@ -90,6 +102,9 @@ export function PlayRoundPanel({
     setError(null);
     setInfo(null);
     setHasConfirmedListen(false);
+    setListenPlayCount(0);
+    setExtraPurchasedListenCount(0);
+    setIsBuyingReplay(false);
     recorder.clearRecording();
     lastSavedAttemptBlobRef.current = null;
   }, [round?.id, recorder.clearRecording]);
@@ -115,6 +130,9 @@ export function PlayRoundPanel({
         isComplete: round.status === 'complete',
       })
     : 'listen';
+  const includedListenCount = round ? INCLUDED_PLAYS_BY_DIFFICULTY[round.difficulty] : 0;
+  const totalListenLimit = includedListenCount + extraPurchasedListenCount;
+  const hasListenPlaysRemaining = listenPlayCount < totalListenLimit;
 
   const canSubmitGuess = useMemo(
     () =>
@@ -287,6 +305,55 @@ export function PlayRoundPanel({
     setHasConfirmedListen(true);
   };
 
+  const handleReversedPromptPlay = () => {
+    setListenPlayCount((currentCount) => {
+      if (currentCount >= totalListenLimit) {
+        return currentCount;
+      }
+
+      return currentCount + 1;
+    });
+  };
+
+  const handleBuyReplay = async () => {
+    if (!isRecipient || !round) {
+      return;
+    }
+
+    if (coins < EXTRA_REPLAY_COST) {
+      setError('You need 5 BB Coins to buy one more replay.');
+      return;
+    }
+
+    setError(null);
+    setInfo(null);
+    setIsBuyingReplay(true);
+    const rollback = applyOptimisticCoinDelta(-EXTRA_REPLAY_COST);
+
+    try {
+      await spendCoins(currentUserId, EXTRA_REPLAY_COST);
+      setExtraPurchasedListenCount((currentCount) => currentCount + 1);
+      try {
+        await refreshCoins();
+      } catch (refreshError) {
+        console.warn('Unable to refresh BB Coins after buying an extra replay.', refreshError);
+      }
+      setInfo('Replay unlocked for 5 BB Coins.');
+    } catch (caughtError) {
+      rollback();
+      try {
+        await refreshCoins();
+      } catch (refreshError) {
+        console.warn('Unable to reconcile BB Coins after a failed replay purchase.', refreshError);
+      }
+      setError(
+        caughtError instanceof Error ? caughtError.message : 'Unable to buy an additional replay.',
+      );
+    } finally {
+      setIsBuyingReplay(false);
+    }
+  };
+
   const handleArchiveRound = async () => {
     setError(null);
     setInfo(null);
@@ -350,12 +417,41 @@ export function PlayRoundPanel({
         <div className="round-screen-body">
           {recipientStage === 'listen' ? (
             <div className="round-screen-step">
-              <AudioPlayerCard
-                title="Reversed prompt"
-                description="Replay this clip until you are ready to imitate it."
-                blob={round.reversedAudioBlob}
-                remoteUrl={round.reversedAudioUrl}
-              />
+              {hasListenPlaysRemaining ? (
+                <AudioPlayerCard
+                  title="Reversed prompt"
+                  description={`Plays used: ${listenPlayCount}/${totalListenLimit}. Easy includes 2, medium 3, hard 4 plays.`}
+                  blob={round.reversedAudioBlob}
+                  remoteUrl={round.reversedAudioUrl}
+                  onPlay={handleReversedPromptPlay}
+                />
+              ) : (
+                <article className="audio-card">
+                  <div className="audio-card-head">
+                    <div>
+                      <h4>Reversed prompt</h4>
+                    </div>
+                  </div>
+                  <p>{`Plays used: ${listenPlayCount}/${totalListenLimit}. Easy includes 2, medium 3, hard 4 plays.`}</p>
+                  <div className="empty-state compact-empty">Replay limit reached.</div>
+                </article>
+              )}
+
+              {!hasListenPlaysRemaining ? (
+                <div className="result-box">
+                  <p>You've used all included listens for this round.</p>
+                  <button
+                    className="button secondary"
+                    disabled={isBuyingReplay || coins < EXTRA_REPLAY_COST}
+                    onClick={() => {
+                      void handleBuyReplay();
+                    }}
+                    type="button"
+                  >
+                    {isBuyingReplay ? 'Unlocking replay...' : `Buy 1 replay (${EXTRA_REPLAY_COST} BB Coins)`}
+                  </button>
+                </div>
+              ) : null}
 
               <div className="helper-text round-screen-helper">
                 Nothing else opens until you confirm you are ready to record.

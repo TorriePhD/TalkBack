@@ -6,6 +6,7 @@ interface AudioPlayerCardProps {
   description: string;
   blob?: Blob | null;
   remoteUrl?: string | null;
+  onPlay?: () => void;
 }
 
 export function AudioPlayerCard({
@@ -13,6 +14,7 @@ export function AudioPlayerCard({
   description,
   blob,
   remoteUrl,
+  onPlay,
 }: AudioPlayerCardProps) {
   const objectUrl = useObjectUrl(blob);
   const src = objectUrl ?? remoteUrl ?? null;
@@ -27,7 +29,7 @@ export function AudioPlayerCard({
       <p>{description}</p>
       {src ? (
         <div className="audio-card-player-wrap">
-          <WaveformPlayButton className="audio-card-player" size={86} src={src} />
+          <WaveformPlayButton className="audio-card-player" onPlay={onPlay} size={86} src={src} />
         </div>
       ) : (
         <div className="empty-state compact-empty">No audio available yet.</div>

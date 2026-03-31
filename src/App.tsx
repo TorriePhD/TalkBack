@@ -21,7 +21,6 @@ import {
   debugPush,
   debugPushError,
   syncPushNotifications,
-  type PushSyncStatus,
 } from './lib/push';
 import { archiveCompletedRound, listRounds } from './lib/rounds';
 import { supabaseConfigError } from './lib/supabase';
@@ -100,10 +99,7 @@ function LoadingPanel({ message }: { message: string }) {
         <WaveformLoader className="loader-panel-spinner" size={122} strokeWidth={4} />
         <span className="loader-panel-preview-label">{loaderPreviewLabel}</span>
       </div>
-      <div>
-        <strong>{message}</strong>
-        <p>The waveform path itself animates, so the energy travels around the ring instead of rotating a flat asset.</p>
-      </div>
+      <strong>{message}</strong>
     </section>
   );
 }
@@ -221,8 +217,6 @@ function App() {
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pushError, setPushError] = useState<string | null>(null);
-  const [pushStatus, setPushStatus] = useState<PushSyncStatus>('disabled');
-  const [isEnablingPush, setIsEnablingPush] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const initialLoadRequestIdRef = useRef(0);
@@ -278,8 +272,6 @@ function App() {
   useEffect(() => {
     if (!currentUserId) {
       setPushError(null);
-      setPushStatus('disabled');
-      setIsEnablingPush(false);
 
       if (
         typeof window !== 'undefined' &&
@@ -305,13 +297,11 @@ function App() {
             pushStatus: result.status,
             userId: currentUserId,
           });
-          setPushStatus(result.status);
           setPushError(null);
         }
       } catch (error) {
         if (!cancelled) {
           debugPushError('Push sync failed for signed-in user.', error);
-          setPushStatus('disabled');
           setPushError(
             error instanceof Error ? error.message : 'Unable to set up push notifications.',
           );
@@ -588,33 +578,7 @@ function App() {
     }
   };
 
-  const handleEnablePushNotifications = async () => {
-    if (!currentUserId) {
-      return;
-    }
 
-    setIsEnablingPush(true);
-    setPushError(null);
-
-    try {
-      const result = await syncPushNotifications(currentUserId, {
-        requestPermission: true,
-      });
-      debugPush('User-triggered push enable flow completed.', {
-        pushStatus: result.status,
-        userId: currentUserId,
-      });
-      setPushStatus(result.status);
-    } catch (error) {
-      debugPushError('User-triggered push enable flow failed.', error);
-      setPushStatus('disabled');
-      setPushError(
-        error instanceof Error ? error.message : 'Unable to enable push notifications.',
-      );
-    } finally {
-      setIsEnablingPush(false);
-    }
-  };
 
   const homeFriendRows = useMemo(
     () =>
@@ -657,74 +621,10 @@ function App() {
         {signOutError ? <div className="error-banner">{signOutError}</div> : null}
         {loadError ? <div className="error-banner">{loadError}</div> : null}
         {pushError ? <div className="error-banner">{pushError}</div> : null}
-        {!currentUserId &&
-        typeof window !== 'undefined' &&
-        window.isSecureContext &&
-        'Notification' in window &&
-        Notification.permission === 'default' &&
-        import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY?.trim() ? (
-          <div className="info-banner notification-banner">
-            <div>
-              <strong>Sign in to enable notifications</strong>
-              <p>The browser prompt only appears after sign-in when you tap Enable notifications.</p>
-            </div>
-          </div>
-        ) : null}
-        {currentUserId && pushStatus === 'unsupported' ? (
-          <div className="info-banner notification-banner">
-            <div>
-              <strong>Push is unavailable on this device or origin</strong>
-              <p>
-                On Android this usually means the app is opened from an HTTP LAN URL instead of
-                HTTPS. Open the app over HTTPS, then reinstall the PWA from that HTTPS origin before
-                trying again.
-              </p>
-              <p>
-                Current origin:{' '}
-                <code>{typeof window !== 'undefined' ? window.location.origin : 'unknown'}</code>
-              </p>
-            </div>
-          </div>
-        ) : null}
-        {currentUserId && pushStatus === 'disabled' ? (
-          <div className="info-banner notification-banner">
-            <div>
-              <strong>Push is not configured for this deployment</strong>
-              <p>
-                This build is missing the public VAPID key, so the app cannot request notification
-                permission or create a push subscription.
-              </p>
-              <p>
-                For GitHub Pages, add <code>VITE_PUSH_VAPID_PUBLIC_KEY</code> as a repository Actions
-                variable, then redeploy.
-              </p>
-            </div>
-          </div>
-        ) : null}
-        {currentUserId && pushStatus === 'needs-permission' ? (
-          <div className="info-banner notification-banner">
-            <div>
-              <strong>Enable notifications</strong>
-              <p>Get a heads-up when your friend sends you a clip.</p>
-            </div>
-            <div className="button-row notification-banner-actions">
-              <button
-                className="button secondary"
-                disabled={isEnablingPush}
-                onClick={() => {
-                  void handleEnablePushNotifications();
-                }}
-                type="button"
-              >
-                {isEnablingPush ? 'Enabling notifications...' : 'Enable notifications'}
-              </button>
-            </div>
-          </div>
-        ) : null}
         <InstallAppPrompt />
 
         {isAuthLoading ? (
-          <LoadingPanel message="Checking your Supabase session..." />
+          <FullscreenLoadingScreen />
         ) : !currentUserId ? (
           <AuthPanel />
         ) : showFullscreenLoader ? (

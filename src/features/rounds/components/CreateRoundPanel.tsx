@@ -36,6 +36,30 @@ function getDifficultyEffectLabel(difficulty: WordOption['displayDifficulty']) {
   return `${difficultyMultiplier[difficulty]}x`;
 }
 
+function getPackAccessLabel(pack: Pick<WordPack, 'isFree' | 'isUnlocked' | 'maxUnlockedDifficulty' | 'unlockTier'>) {
+  if (pack.isFree) {
+    return 'Free';
+  }
+
+  if (pack.isUnlocked === false) {
+    return pack.unlockTier ? `Locked (${pack.unlockTier})` : 'Locked';
+  }
+
+  if (pack.maxUnlockedDifficulty === 'easy') {
+    return 'Easy unlocked';
+  }
+
+  if (pack.maxUnlockedDifficulty === 'medium') {
+    return 'Easy + Medium unlocked';
+  }
+
+  if (pack.maxUnlockedDifficulty === 'hard') {
+    return 'Full pack unlocked';
+  }
+
+  return 'Unlocked';
+}
+
 export function CreateRoundPanel({
   currentUserId,
   currentUserUsername,
@@ -241,7 +265,10 @@ export function CreateRoundPanel({
             <div className="section-header compact-header">
               <div>
                 <h3>Choose a generated prompt</h3>
-                <p>One easy, one medium, one hard. The pack can be switched before you record.</p>
+                <p>
+                  Choose from the difficulties you have unlocked in this pack. The pack can be
+                  switched before you record.
+                </p>
               </div>
             </div>
 
@@ -255,8 +282,13 @@ export function CreateRoundPanel({
                 value={selectedPackId || getDefaultPackId(packs)}
               >
                 {getWordPackOptions(packs).map((pack) => (
-                  <option key={pack.id} value={pack.id}>
-                    {pack.name} {pack.isFree ? '(Free)' : '(Paid)'}
+                  <option
+                    disabled={!pack.isFree && !pack.isUnlocked}
+                    key={pack.id}
+                    value={pack.id}
+                  >
+                    {pack.name}{' '}
+                    ({getPackAccessLabel(pack)})
                   </option>
                 ))}
               </select>
@@ -270,7 +302,17 @@ export function CreateRoundPanel({
                 <p>
                   <strong>Words:</strong> {selectedPack.words.length}
                 </p>
+                <p>
+                  <strong>Access:</strong> {getPackAccessLabel(selectedPack)}
+                </p>
                 {selectedPack.description ? <p>{selectedPack.description}</p> : null}
+              </div>
+            ) : null}
+
+            {!isLoadingPacks && !availableOptions.length ? (
+              <div className="empty-state compact-empty">
+                No prompts are available in this pack yet. Unlock more of the campaign to open the
+                next difficulty tier.
               </div>
             ) : null}
 

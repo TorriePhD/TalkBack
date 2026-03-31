@@ -3,11 +3,11 @@ import homeLogo from './assets/backtalk-logo.png';
 import { StarRating } from './components/StarRating';
 import { WaveformLoader } from './components/WaveformLoader';
 import { AuthPanel } from './features/auth/components/AuthPanel';
+import { CampaignPanel } from './features/campaign/components/CampaignPanel';
 import { CreateRoundPanel } from './features/rounds/components/CreateRoundPanel';
 import { HomePanel } from './features/rounds/components/HomePanel';
 import { PlayRoundPanel } from './features/rounds/components/PlayRoundPanel';
 import type { ArchiveCompletedRoundSummary, Round } from './features/rounds/types';
-import { SinglePlayerPanel } from './features/singlePlayer/components/SinglePlayerPanel';
 import { FriendsPanel } from './features/social/components/FriendsPanel';
 import type { Friend, FriendRequest } from './features/social/types';
 import type { AppProfile } from './lib/auth';
@@ -29,7 +29,7 @@ import { InstallAppPrompt } from './pwa/InstallAppPrompt';
 import { CoinDisplay, ResourceProvider } from './features/resources/ResourceProvider';
 
 type View = 'home' | 'thread' | 'friends';
-type AppPath = '/' | '/singleplayer';
+type AppPath = '/' | '/campaign';
 
 interface ThreadSummary {
   activeRound: Round | null;
@@ -51,7 +51,7 @@ function getAppPath(): AppPath {
     return '/';
   }
 
-  return window.location.pathname === '/singleplayer' ? '/singleplayer' : '/';
+  return window.location.pathname === '/campaign' ? '/campaign' : '/';
 }
 
 function updateAppPath(path: AppPath, options?: { replace?: boolean }) {
@@ -577,9 +577,9 @@ function App() {
     setIsComposingNextRound(false);
   };
 
-  const handleOpenSinglePlayer = () => {
-    updateAppPath('/singleplayer');
-    setAppPath('/singleplayer');
+  const handleOpenCampaign = () => {
+    updateAppPath('/campaign');
+    setAppPath('/campaign');
     setView(DEFAULT_SIGNED_IN_VIEW);
     setIsMenuOpen(false);
     setIsComposingNextRound(false);
@@ -740,8 +740,8 @@ function App() {
                     <DrawerButton active={appPath === '/' && view === 'home'} onClick={handleOpenHome}>
                       Home
                     </DrawerButton>
-                    <DrawerButton active={appPath === '/singleplayer'} onClick={handleOpenSinglePlayer}>
-                      Single Player
+                    <DrawerButton active={appPath === '/campaign'} onClick={handleOpenCampaign}>
+                      Campaign
                     </DrawerButton>
                     <DrawerButton active={view === 'friends'} onClick={handleOpenFriends}>
                       Friends
@@ -763,17 +763,18 @@ function App() {
             ) : null}
 
             <div className="stack">
-              {appPath === '/singleplayer' ? (
-                <SinglePlayerPanel currentUserId={currentUserId} onBack={handleOpenHome} />
+              {appPath === '/campaign' ? (
+                <CampaignPanel currentUserId={currentUserId} onBack={handleOpenHome} />
               ) : null}
               {appPath === '/' && view === 'home' ? (
                 <HomePanel
+                  currentUserId={currentUserId}
                   createGameOptions={createGameOptions}
                   friends={homeFriendRows}
                   onCreateGame={handleCreateGame}
+                  onOpenCampaign={handleOpenCampaign}
                   onOpenFriend={handleSelectFriend}
                   onOpenFriends={handleOpenFriends}
-                  onOpenSinglePlayer={handleOpenSinglePlayer}
                   onRefresh={handleHomeRefresh}
                 />
               ) : null}

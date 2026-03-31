@@ -1,5 +1,6 @@
 import {
-  listWordPacks,
+  filterWordsByMaxUnlockedDifficulty,
+  listWordPacksWithAccess,
   loadWordPackById,
   resolveWordPackId,
   type WordDifficulty,
@@ -13,11 +14,6 @@ const LAST_PRESENTED_PHRASE_KEY = 'word_packs_last_presented_phrase';
 const DIFFICULTY_ORDER: WordDifficulty[] = ['easy', 'medium', 'hard'];
 const FALLBACK_CREATED_AT = '1970-01-01T00:00:00.000Z';
 const FALLBACK_PACK_ID = 'fallback-pack';
-const DIFFICULTY_FALLBACK_ORDER: Record<WordDifficulty, WordDifficulty[]> = {
-  easy: ['easy', 'medium', 'hard'],
-  medium: ['medium', 'easy', 'hard'],
-  hard: ['hard', 'medium', 'easy'],
-};
 
 export interface WordOption extends WordEntry {
   displayDifficulty: WordDifficulty;
@@ -36,6 +32,7 @@ const FALLBACK_WORD_PACK: WordPackWithWords = {
   name: 'Starter Pack',
   description: 'Small built-in fallback pack used when remote packs are unavailable.',
   isFree: true,
+  isUnlocked: true,
   createdAt: FALLBACK_CREATED_AT,
   words: [
     'tiny spoon',
@@ -71,8 +68,13 @@ function getFallbackPackSummary(): WordPack {
     name: FALLBACK_WORD_PACK.name,
     description: FALLBACK_WORD_PACK.description,
     isFree: FALLBACK_WORD_PACK.isFree,
+    isUnlocked: true,
     createdAt: FALLBACK_WORD_PACK.createdAt,
   };
+}
+
+function isPackSelectable(pack: WordPack) {
+  return pack.isFree || pack.isUnlocked !== false;
 }
 
 function getDifficultyBuckets(words: WordEntry[]) {
@@ -134,28 +136,16 @@ function pickWordForDifficulty(
   usedTexts: Set<string>,
   blockedText: string | null,
 ) {
-  for (const difficulty of DIFFICULTY_FALLBACK_ORDER[targetDifficulty]) {
-    const bucket = buckets[difficulty].filter(
-      (word) => !usedTexts.has(word.text) && word.text !== blockedText,
-    );
-    const pick = randomItem(bucket);
+  const bucket = buckets[targetDifficulty].filter(
+    (word) => !usedTexts.has(word.text) && word.text !== blockedText,
+  );
 
-    if (pick) {
-      return pick;
-    }
+  if (bucket.length > 0) {
+    return randomItem(bucket);
   }
 
-  return null;
-}
-
-function getSafeCandidateWords(words: WordEntry[]) {
-  const normalizedWords = dedupeWords(words);
-
-  if (normalizedWords.length >= 3) {
-    return normalizedWords;
-  }
-
-  return dedupeWords([...normalizedWords, ...FALLBACK_WORD_PACK.words]);
+  const relaxedBucket = buckets[targetDifficulty].filter((word) => !usedTexts.has(word.text));
+  return randomItem(relaxedBucket);
 }
 
 function hasLocalStorage() {
@@ -183,7 +173,7 @@ export function rememberPresentedPhrase(phrase: string) {
 }
 
 export function getDefaultPackId(packs: WordPack[]) {
-  return packs[0]?.id ?? FALLBACK_WORD_PACK.id;
+  return packs.find(isPackSelectable)?.id ?? packs[0]?.id ?? FALLBACK_WORD_PACK.id;
 }
 
 export function getWordPackOptions(packs: WordPack[]) {
@@ -192,6 +182,9 @@ export function getWordPackOptions(packs: WordPack[]) {
     name: pack.name,
     description: pack.description,
     isFree: pack.isFree,
+    isUnlocked: pack.isUnlocked !== false,
+    maxUnlockedDifficulty: pack.maxUnlockedDifficulty ?? null,
+    unlockTier: pack.unlockTier ?? null,
   }));
 }
 
@@ -199,25 +192,40 @@ export async function loadRoundWordPacks(
   requestedPackId?: string | null,
 ): Promise<RoundWordPackLoadResult> {
   try {
-    const packs = await listWordPacks();
+    const packs = await listWordPacksWithAccess();
 
     if (!packs.length) {
       throw new Error('No word packs are available yet.');
     }
 
-    const selectedPackId = resolveWordPackId(packs, requestedPackId);
+    const selectedPackId = resolveWordPackId(packs, requestedPackId, {
+      isPackSelectable,
+    });
 
     if (!selectedPackId) {
       throw new Error('No word pack could be selected.');
     }
 
+    const selectedPackBase = packs.find((pack) => pack.id === selectedPackId);
     const selectedPack = await loadWordPackById(selectedPackId);
 
-    if (!selectedPack) {
+    if (!selectedPack || !selectedPackBase) {
       throw new Error('The selected pack could not be loaded.');
     }
 
-    const normalizedPack = normalizeWordPack(selectedPack);
+    const accessibleWords = selectedPackBase.isFree
+      ? selectedPack.words
+      : filterWordsByMaxUnlockedDifficulty(
+          selectedPack.words,
+          selectedPackBase.maxUnlockedDifficulty,
+        );
+
+    const normalizedPack = normalizeWordPack({
+      ...selectedPack,
+      isUnlocked: selectedPackBase.isUnlocked !== false,
+      maxUnlockedDifficulty: selectedPackBase.maxUnlockedDifficulty ?? null,
+      words: accessibleWords,
+    });
 
     if (!normalizedPack.words.length) {
       throw new Error('The selected pack has no usable words.');
@@ -254,26 +262,29 @@ export function getThreeOptions(
       : previousPhrase
         ? normalizePackText(previousPhrase)
         : null;
-  const candidateWords = getSafeCandidateWords(words);
+  const candidateWords = dedupeWords(words);
+
+  if (!candidateWords.length) {
+    return [] as WordOption[];
+  }
+
   const buckets = getDifficultyBuckets(candidateWords);
   const usedTexts = new Set<string>();
 
-  return DIFFICULTY_ORDER.map((difficulty) => {
-    const pickedWord =
-      pickWordForDifficulty(difficulty, buckets, usedTexts, blockedText) ??
-      candidateWords.find(
-        (word) => !usedTexts.has(word.text) && word.text !== blockedText,
-      ) ??
-      FALLBACK_WORD_PACK.words.find(
-        (word) => !usedTexts.has(word.text) && word.text !== blockedText,
-      ) ??
-      FALLBACK_WORD_PACK.words[0];
+  return DIFFICULTY_ORDER.flatMap((difficulty) => {
+    const pickedWord = pickWordForDifficulty(difficulty, buckets, usedTexts, blockedText);
+
+    if (!pickedWord) {
+      return [];
+    }
 
     usedTexts.add(pickedWord.text);
 
-    return {
-      ...pickedWord,
-      displayDifficulty: difficulty,
-    } satisfies WordOption;
+    return [
+      {
+        ...pickedWord,
+        displayDifficulty: difficulty,
+      } satisfies WordOption,
+    ];
   });
 }

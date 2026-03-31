@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState, type TouchEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
 import { StarRating } from '../../../components/StarRating';
+import { loadActiveCampaignState } from '../../../lib/campaigns';
 
 interface HomeFriendSummary {
   id: string;
@@ -14,13 +15,32 @@ interface CreateGameOption {
 }
 
 interface HomePanelProps {
+  currentUserId: string;
   friends: HomeFriendSummary[];
   createGameOptions?: CreateGameOption[];
   onCreateGame?: (friendId: string) => void;
   onOpenFriend?: (friendId: string) => void;
   onOpenFriends?: () => void;
-  onOpenSinglePlayer?: () => void;
+  onOpenCampaign?: () => void;
   onRefresh?: () => Promise<void>;
+}
+
+function formatCampaignEntryTitle(theme: string | null | undefined, rawTitle: string | null | undefined) {
+  const normalizedTheme = theme
+    ?.trim()
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+  if (normalizedTheme) {
+    return `${normalizedTheme} Campaign`;
+  }
+
+  const trimmedTitle = rawTitle?.trim() ?? '';
+  const campaignMatch = trimmedTitle.match(/^(.*?\bcampaign)\b/i);
+
+  return campaignMatch?.[1]?.trim() || trimmedTitle || 'Monthly Campaign';
 }
 
 function formatAverageScore(averageStars: number | null) {
@@ -91,12 +111,13 @@ function RefreshIcon() {
 }
 
 export function HomePanel({
+  currentUserId,
   friends,
   createGameOptions,
   onCreateGame,
   onOpenFriend,
   onOpenFriends,
-  onOpenSinglePlayer,
+  onOpenCampaign,
   onRefresh,
 }: HomePanelProps) {
   const pullThreshold = 72;
@@ -104,6 +125,12 @@ export function HomePanel({
   const [isChoosingFriend, setIsChoosingFriend] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [campaignTitle, setCampaignTitle] = useState('Monthly Campaign');
+  const [campaignSubtitle, setCampaignSubtitle] = useState(
+    '3 stars opens the next egg. One free try per challenge each day.',
+  );
+  const [campaignBannerImage, setCampaignBannerImage] = useState<string | null>(null);
+  const [campaignProgressLabel, setCampaignProgressLabel] = useState<string | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const isPullingRef = useRef(false);
   const sortedCreateGameOptions = useMemo(
@@ -113,6 +140,52 @@ export function HomePanel({
       ),
     [createGameOptions],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCampaignBanner = async () => {
+      try {
+        const campaignState = await loadActiveCampaignState(currentUserId);
+
+        if (cancelled || !campaignState) {
+          return;
+        }
+
+        const assets = campaignState.assets;
+        const bannerImage =
+          Array.isArray(assets)
+            ? assets.find((entry) => entry.key === 'banner_image')?.value ?? null
+            : assets.banner_image ?? null;
+        const title =
+          Array.isArray(assets)
+            ? assets.find((entry) => entry.key === 'title')?.value ?? null
+            : assets.title ?? null;
+
+        setCampaignBannerImage(bannerImage);
+        setCampaignTitle(
+          formatCampaignEntryTitle(campaignState.campaign.theme, title || campaignState.campaign.name),
+        );
+        setCampaignSubtitle('3 stars opens the next egg. One free try per challenge each day.');
+        setCampaignProgressLabel(
+          `Challenge ${campaignState.progress.currentIndex} of ${campaignState.challenges.length}`,
+        );
+      } catch {
+        if (!cancelled) {
+          setCampaignBannerImage(null);
+          setCampaignTitle('Monthly Campaign');
+          setCampaignSubtitle('3 stars opens the next egg. One free try per challenge each day.');
+          setCampaignProgressLabel(null);
+        }
+      }
+    };
+
+    void loadCampaignBanner();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId]);
 
   const handleCreateGameClick = () => {
     if (!sortedCreateGameOptions.length) {
@@ -230,53 +303,79 @@ export function HomePanel({
         className="home-refresh-content"
         style={{ transform: `translateY(${Math.max(0, pullDistance)}px)` }}
       >
-        <div className="home-panel-header">
-          <h2>Current Games</h2>
+        <button
+          className="campaign-home-banner"
+          onClick={() => onOpenCampaign?.()}
+          type="button"
+        >
+          {campaignBannerImage ? (
+            <div
+              aria-hidden="true"
+              className="campaign-home-banner-image"
+              style={{ backgroundImage: `url("${campaignBannerImage}")` }}
+            />
+          ) : null}
+          <div className="campaign-home-banner-copy">
+            <div className="campaign-home-banner-topline">
+              <span className="badge primary">Campaign</span>
+              {campaignProgressLabel ? <span>{campaignProgressLabel}</span> : null}
+            </div>
+            <strong>{campaignTitle}</strong>
+            <p>{campaignSubtitle}</p>
+          </div>
+        </button>
+
+        <div className="home-games-section">
+          <div className="home-panel-header">
+            <h2>Current Games</h2>
+          </div>
+
+          {friends.length === 0 ? (
+            <div className="empty-state home-empty">
+              <h3>No current games</h3>
+              <p>Create a game to start your first one.</p>
+            </div>
+          ) : (
+            <div className="game-list" role="list">
+              {friends.map((friend) => (
+                <div className="game-row" key={friend.id} role="listitem">
+                  <div className="game-row-main">
+                    <div className="game-row-copy">
+                      <strong>{friend.username}</strong>
+                    </div>
+
+                    <div
+                      className="game-score"
+                      aria-label={`Average score ${formatAverageScore(friend.averageStars)}`}
+                    >
+                      <span className="game-score-label">Average Score</span>
+                      <StarRating
+                        label={`Average score ${formatAverageScore(friend.averageStars)}`}
+                        value={friend.averageStars ?? 0}
+                      />
+                      <span className="game-score-value">
+                        {formatAverageScore(friend.averageStars)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="game-actions">
+                    <button
+                      className="button primary game-action-button"
+                      onClick={() => {
+                        onOpenFriend?.(friend.id);
+                      }}
+                      type="button"
+                    >
+                      {friend.isYourTurn ? <PlayIcon /> : <InfoIcon />}
+                      <span>{friend.isYourTurn ? 'Take Turn' : 'Their Turn'}</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-
-        {friends.length === 0 ? (
-          <div className="empty-state home-empty">
-            <h3>No current games</h3>
-            <p>Create a game to start your first one.</p>
-          </div>
-        ) : (
-          <div className="game-list" role="list">
-            {friends.map((friend) => (
-              <div className="game-row" key={friend.id} role="listitem">
-                <div className="game-row-main">
-                  <div className="game-row-copy">
-                    <strong>{friend.username}</strong>
-                  </div>
-
-                  <div
-                    className="game-score"
-                    aria-label={`Average score ${formatAverageScore(friend.averageStars)}`}
-                  >
-                    <span className="game-score-label">Average Score</span>
-                    <StarRating
-                      label={`Average score ${formatAverageScore(friend.averageStars)}`}
-                      value={friend.averageStars ?? 0}
-                    />
-                    <span className="game-score-value">{formatAverageScore(friend.averageStars)}</span>
-                  </div>
-                </div>
-
-                <div className="game-actions">
-                  <button
-                    className="button primary game-action-button"
-                    onClick={() => {
-                      onOpenFriend?.(friend.id);
-                    }}
-                    type="button"
-                  >
-                    {friend.isYourTurn ? <PlayIcon /> : <InfoIcon />}
-                    <span>{friend.isYourTurn ? 'Take Turn' : 'Their Turn'}</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
 
         {isChoosingFriend ? (
           <div className="surface nested-surface home-create-picker">
@@ -301,9 +400,6 @@ export function HomePanel({
 
         <div className="home-footer">
           <div className="button-row">
-            <button className="button secondary" onClick={onOpenSinglePlayer} type="button">
-              Single Player
-            </button>
             <button className="button primary" onClick={handleCreateGameClick} type="button">
               Create game
             </button>

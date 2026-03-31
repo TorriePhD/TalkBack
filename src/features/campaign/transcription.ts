@@ -1,7 +1,7 @@
 import type { AutomaticSpeechRecognitionPipeline } from '@huggingface/transformers';
 
 const WHISPER_MODEL_ID = 'Xenova/whisper-tiny.en';
-const DEBUG_PREFIX = '[SinglePlayer][ASR]';
+const DEBUG_PREFIX = '[Campaign][ASR]';
 
 let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
 
@@ -95,11 +95,7 @@ function getSpeechRecognitionConstructor(): BrowserSpeechRecognitionConstructor 
     webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
   };
 
-  return (
-    recognitionWindow.SpeechRecognition ??
-    recognitionWindow.webkitSpeechRecognition ??
-    null
-  );
+  return recognitionWindow.SpeechRecognition ?? recognitionWindow.webkitSpeechRecognition ?? null;
 }
 
 async function transcribeWithSpeechRecognition(blob: Blob) {
@@ -172,7 +168,9 @@ async function transcribeWithSpeechRecognition(blob: Blob) {
       finish(
         '',
         new Error(
-          event.error ? `Browser speech recognition failed: ${event.error}` : 'Browser speech recognition failed.',
+          event.error
+            ? `Browser speech recognition failed: ${event.error}`
+            : 'Browser speech recognition failed.',
         ),
       );
     };
@@ -218,7 +216,7 @@ async function transcribeWithSpeechRecognition(blob: Blob) {
     }
 
     window.setTimeout(() => {
-      debugLog('Playing reversed imitation into browser speech recognition.');
+      debugLog('Playing reversed attempt into browser speech recognition.');
       void audio.play().catch((error) => {
         try {
           recognition.abort?.();
@@ -235,7 +233,7 @@ async function transcribeWithSpeechRecognition(blob: Blob) {
   });
 }
 
-export async function warmSinglePlayerTranscriber() {
+export async function warmCampaignTranscriber() {
   debugLog('Warm-up requested.');
   await loadWhisperTranscriber();
 }
@@ -260,25 +258,19 @@ export async function transcribeAudio(blob: Blob) {
         return_timestamps: false,
       });
       const transcript = extractTranscriptionText(output);
-      debugLog(`Whisper transcription completed in ${Math.round(performance.now() - startedAt)}ms.`, {
+      debugLog(`Whisper transcription finished in ${Math.round(performance.now() - startedAt)}ms.`, {
         transcript,
       });
-      return transcript;
+
+      if (transcript) {
+        return transcript;
+      }
     } finally {
-      debugLog('Revoking Whisper object URL.');
       URL.revokeObjectURL(objectUrl);
     }
   } catch (error) {
-    console.warn(`${DEBUG_PREFIX} Whisper transcription failed, attempting browser fallback.`, error);
-    try {
-      const transcript = await transcribeWithSpeechRecognition(blob);
-      debugLog(`Browser fallback transcription completed in ${Math.round(performance.now() - startedAt)}ms.`, {
-        transcript,
-      });
-      return transcript;
-    } catch (fallbackError) {
-      console.error(`${DEBUG_PREFIX} Browser fallback also failed.`, fallbackError);
-      throw error instanceof Error ? error : new Error('Unable to transcribe the audio.');
-    }
+    console.warn(`${DEBUG_PREFIX} Whisper transcription failed, falling back to browser speech recognition.`, error);
   }
+
+  return transcribeWithSpeechRecognition(blob);
 }

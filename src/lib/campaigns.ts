@@ -101,14 +101,22 @@ interface CampaignChallengeRow {
 }
 
 interface CampaignAttemptRow {
-  user_id: string;
-  challenge_id: string;
-  attempts_today: number;
-  last_attempt_date: string | null;
-  free_attempt_available: boolean;
-  retry_cost: number;
-  current_balance: number;
-  charged: boolean;
+  user_id?: string;
+  result_user_id?: string;
+  challenge_id?: string;
+  result_challenge_id?: string;
+  attempts_today?: number;
+  result_attempts_today?: number;
+  last_attempt_date?: string | null;
+  result_last_attempt_date?: string | null;
+  free_attempt_available?: boolean;
+  result_free_attempt_available?: boolean;
+  retry_cost?: number;
+  result_retry_cost?: number;
+  current_balance?: number;
+  result_current_balance?: number;
+  charged?: boolean;
+  result_charged?: boolean;
 }
 
 interface CampaignProgressRow {
@@ -136,15 +144,24 @@ interface ActiveCampaignStateRow {
 }
 
 interface CampaignCompletionRow {
-  campaign_id: string;
-  challenge_id: string;
-  user_id: string;
-  current_index: number;
-  completed_count: number;
-  unlocked_pack_ids: string[];
-  newly_unlocked_pack_ids: string[];
-  campaign_complete: boolean;
-  advanced: boolean;
+  campaign_id?: string;
+  result_campaign_id?: string;
+  challenge_id?: string;
+  result_challenge_id?: string;
+  user_id?: string;
+  result_user_id?: string;
+  current_index?: number;
+  result_current_index?: number;
+  completed_count?: number;
+  result_completed_count?: number;
+  unlocked_pack_ids?: string[];
+  result_unlocked_pack_ids?: string[];
+  newly_unlocked_pack_ids?: string[];
+  result_newly_unlocked_pack_ids?: string[];
+  campaign_complete?: boolean;
+  result_campaign_complete?: boolean;
+  advanced?: boolean;
+  result_advanced?: boolean;
 }
 
 function requireSupabase() {
@@ -275,14 +292,15 @@ function mapChallengeRow(row: CampaignChallengeRow): CampaignChallenge {
 
 function mapAttemptRow(row: CampaignAttemptRow): CampaignAttemptState {
   return {
-    userId: row.user_id,
-    challengeId: row.challenge_id,
-    attemptsToday: row.attempts_today,
-    lastAttemptDate: row.last_attempt_date,
-    freeAttemptAvailable: row.free_attempt_available,
-    retryCost: row.retry_cost ?? CAMPAIGN_RETRY_COST,
-    currentBalance: row.current_balance,
-    charged: row.charged,
+    userId: row.user_id ?? row.result_user_id ?? '',
+    challengeId: row.challenge_id ?? row.result_challenge_id ?? '',
+    attemptsToday: row.attempts_today ?? row.result_attempts_today ?? 0,
+    lastAttemptDate: row.last_attempt_date ?? row.result_last_attempt_date ?? null,
+    freeAttemptAvailable:
+      row.free_attempt_available ?? row.result_free_attempt_available ?? false,
+    retryCost: row.retry_cost ?? row.result_retry_cost ?? CAMPAIGN_RETRY_COST,
+    currentBalance: row.current_balance ?? row.result_current_balance ?? 0,
+    charged: row.charged ?? row.result_charged ?? false,
   };
 }
 
@@ -296,19 +314,26 @@ function mapProgressRow(row: CampaignProgressRow): CampaignProgress {
 }
 
 function mapCompletionRow(row: CampaignCompletionRow): CampaignCompletionResult {
+  const campaignId = row.campaign_id ?? row.result_campaign_id ?? '';
+  const challengeId = row.challenge_id ?? row.result_challenge_id ?? '';
+  const userId = row.user_id ?? row.result_user_id ?? '';
+  const currentIndex = row.current_index ?? row.result_current_index ?? 1;
+  const completedCount = row.completed_count ?? row.result_completed_count ?? 0;
+
   return {
-    campaignId: row.campaign_id,
-    challengeId: row.challenge_id,
+    campaignId,
+    challengeId,
     progress: {
-      userId: row.user_id,
-      campaignId: row.campaign_id,
-      currentIndex: row.current_index,
-      completedCount: row.completed_count,
+      userId,
+      campaignId,
+      currentIndex,
+      completedCount,
     },
-    unlockedPackIds: row.unlocked_pack_ids,
-    newlyUnlockedPackIds: row.newly_unlocked_pack_ids,
-    campaignComplete: row.campaign_complete,
-    advanced: row.advanced,
+    unlockedPackIds: row.unlocked_pack_ids ?? row.result_unlocked_pack_ids ?? [],
+    newlyUnlockedPackIds:
+      row.newly_unlocked_pack_ids ?? row.result_newly_unlocked_pack_ids ?? [],
+    campaignComplete: row.campaign_complete ?? row.result_campaign_complete ?? false,
+    advanced: row.advanced ?? row.result_advanced ?? false,
   };
 }
 

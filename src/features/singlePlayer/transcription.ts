@@ -1,9 +1,11 @@
 import type { AutomaticSpeechRecognitionPipeline } from '@huggingface/transformers';
+import { getSharedAudioContext } from '../../audio/utils/audioContext';
 
 const WHISPER_MODEL_ID = 'Xenova/whisper-tiny.en';
 const DEBUG_PREFIX = '[SinglePlayer][ASR]';
 
 let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
+const WHISPER_TARGET_SAMPLE_RATE = 16_000;
 
 function debugLog(message: string, details?: unknown) {
   if (details === undefined) {
@@ -38,6 +40,81 @@ function extractTranscriptionText(output: unknown) {
   return '';
 }
 
+function downmixToMono(audioBuffer: AudioBuffer) {
+  const { numberOfChannels, length } = audioBuffer;
+  if (numberOfChannels === 1) {
+    return audioBuffer.getChannelData(0);
+  }
+
+  const mono = new Float32Array(length);
+  for (let channelIndex = 0; channelIndex < numberOfChannels; channelIndex += 1) {
+    const channelData = audioBuffer.getChannelData(channelIndex);
+    for (let sampleIndex = 0; sampleIndex < length; sampleIndex += 1) {
+      mono[sampleIndex] += channelData[sampleIndex];
+    }
+  }
+
+  const gain = 1 / numberOfChannels;
+  for (let sampleIndex = 0; sampleIndex < length; sampleIndex += 1) {
+    mono[sampleIndex] *= gain;
+  }
+
+  return mono;
+}
+
+function getOfflineAudioContextConstructor() {
+  if (typeof window === 'undefined') {
+    throw new Error('Offline audio conversion is only available in the browser.');
+  }
+
+  const OfflineContext =
+    window.OfflineAudioContext ??
+    (window as Window & { webkitOfflineAudioContext?: typeof OfflineAudioContext })
+      .webkitOfflineAudioContext;
+
+  if (!OfflineContext) {
+    throw new Error('Offline audio conversion is not supported in this browser.');
+  }
+
+  return OfflineContext;
+}
+
+async function normalizeBlobForWhisper(blob: Blob) {
+  const sourceContext = await getSharedAudioContext();
+  const sourceBuffer = await blob.arrayBuffer();
+  const decodedAudio = await sourceContext.decodeAudioData(sourceBuffer.slice(0));
+
+  const targetFrameCount = Math.max(
+    1,
+    Math.round(decodedAudio.duration * WHISPER_TARGET_SAMPLE_RATE),
+  );
+
+  const OfflineAudioContextClass = getOfflineAudioContextConstructor();
+  const offlineContext = new OfflineAudioContextClass(
+    1,
+    targetFrameCount,
+    WHISPER_TARGET_SAMPLE_RATE,
+  );
+  const sourceNode = offlineContext.createBufferSource();
+  sourceNode.buffer = decodedAudio;
+  sourceNode.connect(offlineContext.destination);
+  sourceNode.start(0);
+
+  const renderedBuffer = await offlineContext.startRendering();
+  const monoAudio = downmixToMono(renderedBuffer);
+  const pcm = new Float32Array(monoAudio.length);
+  pcm.set(monoAudio);
+
+  debugLog('Prepared Whisper input PCM.', {
+    channels: renderedBuffer.numberOfChannels,
+    sourceSampleRate: decodedAudio.sampleRate,
+    targetSampleRate: WHISPER_TARGET_SAMPLE_RATE,
+    sampleCount: pcm.length,
+  });
+
+  return pcm;
+}
+
 async function loadWhisperTranscriber() {
   if (!transcriberPromise) {
     transcriberPromise = (async () => {
@@ -49,7 +126,7 @@ async function loadWhisperTranscriber() {
 
       const transcriber = await pipeline('automatic-speech-recognition', WHISPER_MODEL_ID, {
         dtype: 'q8',
-        progress_callback: (progress) => {
+        progress_callback: (progress: unknown) => {
           debugLog('Model progress update.', progress);
         },
       });
@@ -249,25 +326,20 @@ export async function transcribeAudio(blob: Blob) {
 
   try {
     const transcriber = await loadWhisperTranscriber();
-    const objectUrl = URL.createObjectURL(blob);
-    debugLog('Created object URL for Whisper transcription.');
+    const normalizedPcm = await normalizeBlobForWhisper(blob);
+    debugLog('Invoking Whisper transcription with mono float32 PCM.');
 
-    try {
-      debugLog('Invoking Whisper transcription.');
-      const output = await transcriber(objectUrl, {
-        chunk_length_s: 10,
-        stride_length_s: 2,
-        return_timestamps: false,
-      });
-      const transcript = extractTranscriptionText(output);
-      debugLog(`Whisper transcription completed in ${Math.round(performance.now() - startedAt)}ms.`, {
-        transcript,
-      });
-      return transcript;
-    } finally {
-      debugLog('Revoking Whisper object URL.');
-      URL.revokeObjectURL(objectUrl);
-    }
+    const output = await transcriber(normalizedPcm, {
+      sampling_rate: WHISPER_TARGET_SAMPLE_RATE,
+      chunk_length_s: 10,
+      stride_length_s: 2,
+      return_timestamps: false,
+    });
+    const transcript = extractTranscriptionText(output);
+    debugLog(`Whisper transcription completed in ${Math.round(performance.now() - startedAt)}ms.`, {
+      transcript,
+    });
+    return transcript;
   } catch (error) {
     console.warn(`${DEBUG_PREFIX} Whisper transcription failed, attempting browser fallback.`, error);
     try {

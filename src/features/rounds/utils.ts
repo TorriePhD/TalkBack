@@ -6,6 +6,7 @@ export function normalizeGuess(value: string) {
     .replace(/[\u201C\u201D\u2033]/g, '"')
     .replace(/[\p{P}\p{S}]+/gu, ' ')
     .replace(/\s+/g, ' ')
+    .trim()
     .toLocaleLowerCase();
 }
 

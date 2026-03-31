@@ -2,6 +2,7 @@ import type { AutomaticSpeechRecognitionPipeline } from '@huggingface/transforme
 
 const WHISPER_MODEL_ID = 'Xenova/whisper-tiny.en';
 const DEBUG_PREFIX = '[Campaign][ASR]';
+const TARGET_SAMPLE_RATE = 16_000;
 
 let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
 
@@ -38,6 +39,87 @@ function extractTranscriptionText(output: unknown) {
   return '';
 }
 
+async function decodeAudioBlob(blob: Blob) {
+  const AudioContextCtor =
+    typeof window !== 'undefined'
+      ? (window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)
+      : undefined;
+
+  if (!AudioContextCtor) {
+    throw new Error('AudioContext is not available in this browser.');
+  }
+
+  const arrayBuffer = await blob.arrayBuffer();
+  const audioContext = new AudioContextCtor();
+
+  try {
+    return await audioContext.decodeAudioData(arrayBuffer.slice(0));
+  } finally {
+    void audioContext.close();
+  }
+}
+
+function mixToMono(audioBuffer: AudioBuffer) {
+  const { numberOfChannels, length } = audioBuffer;
+
+  if (numberOfChannels === 1) {
+    return new Float32Array(audioBuffer.getChannelData(0));
+  }
+
+  const mono = new Float32Array(length);
+
+  for (let channelIndex = 0; channelIndex < numberOfChannels; channelIndex += 1) {
+    const channelData = audioBuffer.getChannelData(channelIndex);
+    for (let frameIndex = 0; frameIndex < length; frameIndex += 1) {
+      mono[frameIndex] += channelData[frameIndex] ?? 0;
+    }
+  }
+
+  const scale = 1 / numberOfChannels;
+  for (let frameIndex = 0; frameIndex < length; frameIndex += 1) {
+    mono[frameIndex] *= scale;
+  }
+
+  return mono;
+}
+
+function resampleFloat32Linear(samples: Float32Array, sourceSampleRate: number, targetSampleRate: number) {
+  if (sourceSampleRate === targetSampleRate) {
+    return samples;
+  }
+
+  const ratio = sourceSampleRate / targetSampleRate;
+  const targetLength = Math.max(1, Math.round(samples.length / ratio));
+  const output = new Float32Array(targetLength);
+
+  for (let index = 0; index < targetLength; index += 1) {
+    const sourceIndex = index * ratio;
+    const sourceFloor = Math.floor(sourceIndex);
+    const sourceCeil = Math.min(sourceFloor + 1, samples.length - 1);
+    const interpolation = sourceIndex - sourceFloor;
+    output[index] =
+      (samples[sourceFloor] ?? 0) * (1 - interpolation) + (samples[sourceCeil] ?? 0) * interpolation;
+  }
+
+  return output;
+}
+
+async function normalizeAudioForWhisper(blob: Blob) {
+  const audioBuffer = await decodeAudioBlob(blob);
+  const mono = mixToMono(audioBuffer);
+  const resampled = resampleFloat32Linear(mono, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
+
+  debugLog('Normalized audio for Whisper.', {
+    sourceChannels: audioBuffer.numberOfChannels,
+    sourceSampleRate: audioBuffer.sampleRate,
+    sourceFrames: audioBuffer.length,
+    outputSampleRate: TARGET_SAMPLE_RATE,
+    outputFrames: resampled.length,
+  });
+
+  return resampled;
+}
+
 async function loadWhisperTranscriber() {
   if (!transcriberPromise) {
     transcriberPromise = (async () => {
@@ -49,7 +131,7 @@ async function loadWhisperTranscriber() {
 
       const transcriber = await pipeline('automatic-speech-recognition', WHISPER_MODEL_ID, {
         dtype: 'q8',
-        progress_callback: (progress) => {
+        progress_callback: (progress: unknown) => {
           debugLog('Model progress update.', progress);
         },
       });
@@ -247,26 +329,21 @@ export async function transcribeAudio(blob: Blob) {
 
   try {
     const transcriber = await loadWhisperTranscriber();
-    const objectUrl = URL.createObjectURL(blob);
-    debugLog('Created object URL for Whisper transcription.');
+    const normalizedAudio = await normalizeAudioForWhisper(blob);
 
-    try {
-      debugLog('Invoking Whisper transcription.');
-      const output = await transcriber(objectUrl, {
-        chunk_length_s: 10,
-        stride_length_s: 2,
-        return_timestamps: false,
-      });
-      const transcript = extractTranscriptionText(output);
-      debugLog(`Whisper transcription finished in ${Math.round(performance.now() - startedAt)}ms.`, {
-        transcript,
-      });
+    debugLog('Invoking Whisper transcription with mono float32 PCM audio.');
+    const output = await transcriber(normalizedAudio, {
+      chunk_length_s: 10,
+      stride_length_s: 2,
+      return_timestamps: false,
+    });
+    const transcript = extractTranscriptionText(output);
+    debugLog(`Whisper transcription completed in ${Math.round(performance.now() - startedAt)}ms.`, {
+      transcript,
+    });
 
-      if (transcript) {
-        return transcript;
-      }
-    } finally {
-      URL.revokeObjectURL(objectUrl);
+    if (transcript) {
+      return transcript;
     }
   } catch (error) {
     console.warn(`${DEBUG_PREFIX} Whisper transcription failed, falling back to browser speech recognition.`, error);

@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
-import { StarRating } from '../../../components/StarRating';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { WaveformLoader } from '../../../components/WaveformLoader';
 import { useCoins } from '../../resources/ResourceProvider';
 import { difficultyMultiplier } from '../../../lib/rounds';
 import { awardCoins } from '../../../lib/singlePlayerRewards';
+import { RoundRewardSequence } from '../../rounds/components/RoundRewardSequence';
 import type { WordPack, WordPackWithWords } from '../../../lib/wordPacks';
 import { calculateGuessSimilarity } from '../../rounds/utils';
 import {
@@ -25,6 +25,7 @@ import {
   type SinglePlayerPhase,
 } from '../game';
 import { transcribeAudio, warmSinglePlayerTranscriber } from '../transcription';
+import type { RoundReward } from '../../rounds/types';
 
 interface SinglePlayerPanelProps {
   currentUserId: string;
@@ -124,6 +125,20 @@ export function SinglePlayerPanel({
 
   const optionMap = mapOptionsByDifficulty(options);
   const activeStep = getActiveStep(phase);
+  const scoreLabel = asrText || 'No speech detected';
+  const singlePlayerReward = useMemo<RoundReward>(
+    () => ({
+      id: `${rewardKeyRef.current}-reward`,
+      roundId: rewardKeyRef.current,
+      userId: currentUserId,
+      stars: Math.max(0, Math.min(3, stars)) as RoundReward['stars'],
+      difficulty: selectedOption?.displayDifficulty ?? 'easy',
+      rewardAmount: coinsEarned,
+      claimed: true,
+      createdAt: new Date().toISOString(),
+    }),
+    [coinsEarned, currentUserId, selectedOption?.displayDifficulty, stars],
+  );
 
   useEffect(() => {
     console.debug('[SinglePlayer] Phase changed.', {
@@ -865,54 +880,31 @@ export function SinglePlayerPanel({
 
         {phase === 'result' ? (
           <div className="round-screen-step">
-            <div className="single-player-result-card">
-              <div className="single-player-result-hero">
-                <div>
-                  <div className="eyebrow">Round Complete</div>
-                  <h3>{selectedOption?.text}</h3>
-                  <p>
-                    {asrText
-                      ? `Whisper heard "${asrText}".`
-                      : 'No usable transcription came back, so this round scored as zero.'}
-                  </p>
-                </div>
-
-                <div className="single-player-result-stars">
-                  <StarRating label={`${stars} stars`} large value={stars} />
-                  <strong>{coinsEarned > 0 ? `+${coinsEarned} BB Coins` : 'No BB Coins this round'}</strong>
-                </div>
+            <RoundRewardSequence
+              baseCoins={0}
+              onDisplayedCoinsChange={() => {
+                // Single-player does not preview navbar totals; keep animation behavior only.
+              }}
+              reward={singlePlayerReward}
+            >
+              <div className="reward-reveal-details">
+                <p>
+                  <strong>Target phrase:</strong> {selectedOption?.text || 'No target phrase'}
+                </p>
+                <p>
+                  <strong>Detected phrase:</strong> {scoreLabel}
+                </p>
+                <p>
+                  <strong>Score:</strong> {formatScore(score)} ·{' '}
+                  {selectedOption ? formatDifficultyLabel(selectedOption.displayDifficulty) : 'Easy'}
+                </p>
               </div>
-
-              <div className="single-player-metric-grid">
-                <div className="single-player-metric">
-                  <span>Difficulty</span>
-                  <strong>
-                    {selectedOption ? formatDifficultyLabel(selectedOption.displayDifficulty) : 'None'}
-                  </strong>
-                </div>
-                <div className="single-player-metric">
-                  <span>Score</span>
-                  <strong>{formatScore(score)}</strong>
-                </div>
-                <div className="single-player-metric">
-                  <span>Transcript</span>
-                  <strong>{asrText || 'No speech detected'}</strong>
-                </div>
-              </div>
-            </div>
-
-            <div className="audio-grid">
-              <AudioPlayerCard
-                title="Original phrase"
-                description="Your normal reference take."
-                blob={originalRecording}
-              />
               <AudioPlayerCard
                 title="Reversed imitation"
-                description="This flipped version is what the speech model transcribed."
+                description="Listen to the reversed imitation that was used for speech detection."
                 blob={reversedImitationRecording}
               />
-            </div>
+            </RoundRewardSequence>
 
             <div className="button-row">
               <button

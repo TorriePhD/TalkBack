@@ -1,23 +1,8 @@
 import { encodeAudioBufferToWav } from './encodeWav';
-
-type AudioContextConstructor = typeof AudioContext;
-
-function getAudioContextConstructor(): AudioContextConstructor {
-  const Context =
-    window.AudioContext ??
-    (window as Window & { webkitAudioContext?: AudioContextConstructor })
-      .webkitAudioContext;
-
-  if (!Context) {
-    throw new Error('Web Audio is not available in this browser.');
-  }
-
-  return Context;
-}
+import { getSharedAudioContext } from './audioContext';
 
 export async function reverseAudioBlob(blob: Blob): Promise<Blob> {
-  const AudioContextClass = getAudioContextConstructor();
-  const audioContext = new AudioContextClass();
+  const audioContext = await getSharedAudioContext();
 
   try {
     const sourceBuffer = await blob.arrayBuffer();
@@ -51,11 +36,5 @@ export async function reverseAudioBlob(blob: Blob): Promise<Blob> {
         ? `Unable to reverse this audio file: ${error.message}`
         : 'Unable to reverse this audio file.',
     );
-  } finally {
-    try {
-      await audioContext.close();
-    } catch {
-      // Ignore close failures on browsers that already tore the context down.
-    }
   }
 }

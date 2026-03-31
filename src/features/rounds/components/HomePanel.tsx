@@ -19,6 +19,7 @@ interface HomePanelProps {
   onCreateGame?: (friendId: string) => void;
   onOpenFriend?: (friendId: string) => void;
   onOpenFriends?: () => void;
+  onOpenSinglePlayer?: () => void;
   onRefresh?: () => Promise<void>;
 }
 
@@ -95,6 +96,7 @@ export function HomePanel({
   onCreateGame,
   onOpenFriend,
   onOpenFriends,
+  onOpenSinglePlayer,
   onRefresh,
 }: HomePanelProps) {
   const pullThreshold = 72;
@@ -299,6 +301,9 @@ export function HomePanel({
 
         <div className="home-footer">
           <div className="button-row">
+            <button className="button secondary" onClick={onOpenSinglePlayer} type="button">
+              Single Player
+            </button>
             <button className="button primary" onClick={handleCreateGameClick} type="button">
               Create game
             </button>

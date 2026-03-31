@@ -10,10 +10,14 @@ import {
 import { computeDifficulty, normalizePackText } from '../../utils/difficulty';
 
 const LAST_PRESENTED_PHRASE_KEY = 'word_packs_last_presented_phrase';
-const MIN_BUCKET_SIZE = 2;
 const DIFFICULTY_ORDER: WordDifficulty[] = ['easy', 'medium', 'hard'];
 const FALLBACK_CREATED_AT = '1970-01-01T00:00:00.000Z';
 const FALLBACK_PACK_ID = 'fallback-pack';
+const DIFFICULTY_FALLBACK_ORDER: Record<WordDifficulty, WordDifficulty[]> = {
+  easy: ['easy', 'medium', 'hard'],
+  medium: ['medium', 'easy', 'hard'],
+  hard: ['hard', 'medium', 'easy'],
+};
 
 export interface WordOption extends WordEntry {
   displayDifficulty: WordDifficulty;
@@ -71,26 +75,6 @@ function getFallbackPackSummary(): WordPack {
   };
 }
 
-function getWordScore(word: WordEntry) {
-  return word.syllables + word.charLength * 0.15;
-}
-
-function getTargetScore(difficulty: WordDifficulty) {
-  if (difficulty === 'easy') {
-    return 2.4;
-  }
-
-  if (difficulty === 'medium') {
-    return 5.2;
-  }
-
-  return 8.2;
-}
-
-function getDifficultyDistance(word: WordEntry, targetDifficulty: WordDifficulty) {
-  return Math.abs(getWordScore(word) - getTargetScore(targetDifficulty));
-}
-
 function getDifficultyBuckets(words: WordEntry[]) {
   return words.reduce<Record<WordDifficulty, WordEntry[]>>(
     (buckets, word) => {
@@ -136,43 +120,6 @@ function normalizeWordPack(pack: WordPackWithWords): WordPackWithWords {
   };
 }
 
-function rebalanceBucket(
-  targetDifficulty: WordDifficulty,
-  buckets: Record<WordDifficulty, WordEntry[]>,
-  allWords: WordEntry[],
-) {
-  const rebalancedBucket = [...buckets[targetDifficulty]].sort(
-    (left, right) =>
-      getDifficultyDistance(left, targetDifficulty) -
-      getDifficultyDistance(right, targetDifficulty),
-  );
-
-  if (rebalancedBucket.length >= MIN_BUCKET_SIZE) {
-    return rebalancedBucket;
-  }
-
-  const supplements = allWords
-    .filter(
-      (word) =>
-        !rebalancedBucket.some((candidate) => candidate.text === word.text),
-    )
-    .sort(
-      (left, right) =>
-        getDifficultyDistance(left, targetDifficulty) -
-        getDifficultyDistance(right, targetDifficulty),
-    );
-
-  for (const word of supplements) {
-    if (rebalancedBucket.length >= MIN_BUCKET_SIZE) {
-      break;
-    }
-
-    rebalancedBucket.push(word);
-  }
-
-  return rebalancedBucket;
-}
-
 function randomItem<T>(items: T[]) {
   if (!items.length) {
     return null;
@@ -187,13 +134,7 @@ function pickWordForDifficulty(
   usedTexts: Set<string>,
   blockedText: string | null,
 ) {
-  const orderedDifficulties = [...DIFFICULTY_ORDER].sort(
-    (left, right) =>
-      Math.abs(getTargetScore(left) - getTargetScore(targetDifficulty)) -
-      Math.abs(getTargetScore(right) - getTargetScore(targetDifficulty)),
-  );
-
-  for (const difficulty of orderedDifficulties) {
+  for (const difficulty of DIFFICULTY_FALLBACK_ORDER[targetDifficulty]) {
     const bucket = buckets[difficulty].filter(
       (word) => !usedTexts.has(word.text) && word.text !== blockedText,
     );
@@ -314,17 +255,12 @@ export function getThreeOptions(
         ? normalizePackText(previousPhrase)
         : null;
   const candidateWords = getSafeCandidateWords(words);
-  const baseBuckets = getDifficultyBuckets(candidateWords);
-  const rebalancedBuckets: Record<WordDifficulty, WordEntry[]> = {
-    easy: rebalanceBucket('easy', baseBuckets, candidateWords),
-    medium: rebalanceBucket('medium', baseBuckets, candidateWords),
-    hard: rebalanceBucket('hard', baseBuckets, candidateWords),
-  };
+  const buckets = getDifficultyBuckets(candidateWords);
   const usedTexts = new Set<string>();
 
   return DIFFICULTY_ORDER.map((difficulty) => {
     const pickedWord =
-      pickWordForDifficulty(difficulty, rebalancedBuckets, usedTexts, blockedText) ??
+      pickWordForDifficulty(difficulty, buckets, usedTexts, blockedText) ??
       candidateWords.find(
         (word) => !usedTexts.has(word.text) && word.text !== blockedText,
       ) ??

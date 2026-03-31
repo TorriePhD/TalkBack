@@ -9,6 +9,29 @@ export function normalizeGuess(value: string) {
     .toLocaleLowerCase();
 }
 
+export function calculateGuessSimilarity(guess: string, correctPhrase: string) {
+  const normalizedGuess = normalizeGuess(guess);
+  const normalizedCorrectPhrase = normalizeGuess(correctPhrase);
+  const guessWords = normalizedGuess ? normalizedGuess.split(' ') : [];
+  const correctWords = normalizedCorrectPhrase ? normalizedCorrectPhrase.split(' ') : [];
+  const maxWordLength = Math.max(guessWords.length, correctWords.length);
+  const shouldUseWordErrorRate = maxWordLength > 2;
+
+  const maxLength = shouldUseWordErrorRate
+    ? maxWordLength
+    : Math.max(normalizedGuess.length, normalizedCorrectPhrase.length);
+
+  if (maxLength === 0) {
+    return 1;
+  }
+
+  const distance = shouldUseWordErrorRate
+    ? wordEditDistance(guessWords, correctWords)
+    : wassersteinEditDistance(normalizedGuess, normalizedCorrectPhrase);
+
+  return Math.max(0, 1 - distance / maxLength);
+}
+
 function wassersteinEditDistance(a: string, b: string) {
   const source = normalizeGuess(a);
   const target = normalizeGuess(b);
@@ -83,25 +106,5 @@ function wordEditDistance(a: string[], b: string[]) {
 }
 
 export function scoreGuess(guess: string, correctPhrase: string) {
-  const normalizedGuess = normalizeGuess(guess);
-  const normalizedCorrectPhrase = normalizeGuess(correctPhrase);
-  const guessWords = normalizedGuess ? normalizedGuess.split(' ') : [];
-  const correctWords = normalizedCorrectPhrase ? normalizedCorrectPhrase.split(' ') : [];
-  const maxWordLength = Math.max(guessWords.length, correctWords.length);
-  const shouldUseWordErrorRate = maxWordLength > 2;
-
-  const maxLength = shouldUseWordErrorRate
-    ? maxWordLength
-    : Math.max(normalizedGuess.length, normalizedCorrectPhrase.length);
-
-  if (maxLength === 0) {
-    return 10;
-  }
-
-  const distance = shouldUseWordErrorRate
-    ? wordEditDistance(guessWords, correctWords)
-    : wassersteinEditDistance(normalizedGuess, normalizedCorrectPhrase);
-  const normalizedSimilarity = 1 - distance / maxLength;
-
-  return Math.max(0, Math.round(normalizedSimilarity * 10));
+  return Math.max(0, Math.round(calculateGuessSimilarity(guess, correctPhrase) * 10));
 }

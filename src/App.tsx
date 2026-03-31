@@ -7,6 +7,7 @@ import { CreateRoundPanel } from './features/rounds/components/CreateRoundPanel'
 import { HomePanel } from './features/rounds/components/HomePanel';
 import { PlayRoundPanel } from './features/rounds/components/PlayRoundPanel';
 import type { ArchiveCompletedRoundSummary, Round } from './features/rounds/types';
+import { SinglePlayerPanel } from './features/singlePlayer/components/SinglePlayerPanel';
 import { FriendsPanel } from './features/social/components/FriendsPanel';
 import type { Friend, FriendRequest } from './features/social/types';
 import type { AppProfile } from './lib/auth';
@@ -29,6 +30,7 @@ import { InstallAppPrompt } from './pwa/InstallAppPrompt';
 import { CoinDisplay, ResourceProvider } from './features/resources/ResourceProvider';
 
 type View = 'home' | 'thread' | 'friends';
+type AppPath = '/' | '/singleplayer';
 
 interface ThreadSummary {
   activeRound: Round | null;
@@ -44,6 +46,28 @@ interface ThreadSummary {
 }
 
 const DEFAULT_SIGNED_IN_VIEW: View = 'home';
+
+function getAppPath(): AppPath {
+  if (typeof window === 'undefined') {
+    return '/';
+  }
+
+  return window.location.pathname === '/singleplayer' ? '/singleplayer' : '/';
+}
+
+function updateAppPath(path: AppPath, options?: { replace?: boolean }) {
+  if (typeof window === 'undefined' || window.location.pathname === path) {
+    return;
+  }
+
+  if (options?.replace) {
+    window.history.replaceState(window.history.state, '', path);
+    return;
+  }
+
+  window.history.pushState(window.history.state, '', path);
+}
+
 function sortNewestFirst(left: Round, right: Round) {
   return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
 }
@@ -209,6 +233,7 @@ function WaitingThreadPanel({
 
 function App() {
   const [view, setView] = useState<View>(DEFAULT_SIGNED_IN_VIEW);
+  const [appPath, setAppPath] = useState<AppPath>(() => getAppPath());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isComposingNextRound, setIsComposingNextRound] = useState(false);
   const [profile, setProfile] = useState<AppProfile | null>(null);
@@ -229,6 +254,23 @@ function App() {
   const dataRefreshInFlightRef = useRef(false);
   const showSecureContextWarning =
     typeof window !== 'undefined' && !window.isSecureContext;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handlePopState = () => {
+      setAppPath(getAppPath());
+      setIsMenuOpen(false);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
 
   useEffect(() => {
     if (supabaseConfigError) {
@@ -396,6 +438,8 @@ function App() {
       setRounds([]);
       setSelectedFriendId(null);
       setView(DEFAULT_SIGNED_IN_VIEW);
+      updateAppPath('/', { replace: true });
+      setAppPath('/');
       setIsMenuOpen(false);
       setIsComposingNextRound(false);
       initialLoadRequestIdRef.current += 1;
@@ -501,6 +545,8 @@ function App() {
   );
 
   const handleSelectFriend = (friendId: string) => {
+    updateAppPath('/');
+    setAppPath('/');
     setSelectedFriendId(friendId);
     setIsComposingNextRound(false);
     setView('thread');
@@ -508,6 +554,8 @@ function App() {
   };
 
   const handleCreateGame = (friendId: string) => {
+    updateAppPath('/');
+    setAppPath('/');
     setSelectedFriendId(friendId);
     setIsComposingNextRound(true);
     setView('thread');
@@ -515,6 +563,8 @@ function App() {
   };
 
   const handleCreateRound = (round: Round) => {
+    updateAppPath('/');
+    setAppPath('/');
     setRounds((currentRounds) => [round, ...currentRounds]);
     setSelectedFriendId(getSelectedFriendIdFromRound(round, currentUserId));
     setIsComposingNextRound(false);
@@ -522,13 +572,25 @@ function App() {
   };
 
   const handleOpenFriends = () => {
+    updateAppPath('/');
+    setAppPath('/');
     setView('friends');
     setIsMenuOpen(false);
     setIsComposingNextRound(false);
   };
 
   const handleOpenHome = () => {
+    updateAppPath('/');
+    setAppPath('/');
     setView('home');
+    setIsMenuOpen(false);
+    setIsComposingNextRound(false);
+  };
+
+  const handleOpenSinglePlayer = () => {
+    updateAppPath('/singleplayer');
+    setAppPath('/singleplayer');
+    setView(DEFAULT_SIGNED_IN_VIEW);
     setIsMenuOpen(false);
     setIsComposingNextRound(false);
   };
@@ -580,6 +642,8 @@ function App() {
 
     try {
       await signOut();
+      updateAppPath('/', { replace: true });
+      setAppPath('/');
       setView(DEFAULT_SIGNED_IN_VIEW);
       setIsMenuOpen(false);
       setIsComposingNextRound(false);
@@ -773,8 +837,11 @@ function App() {
                   </div>
 
                   <nav className="nav-row" aria-label="Primary">
-                    <DrawerButton active={view === 'home'} onClick={handleOpenHome}>
+                    <DrawerButton active={appPath === '/' && view === 'home'} onClick={handleOpenHome}>
                       Home
+                    </DrawerButton>
+                    <DrawerButton active={appPath === '/singleplayer'} onClick={handleOpenSinglePlayer}>
+                      Single Player
                     </DrawerButton>
                     <DrawerButton active={view === 'friends'} onClick={handleOpenFriends}>
                       Friends
@@ -796,20 +863,24 @@ function App() {
             ) : null}
 
             <div className="stack">
-              {view === 'home' ? (
+              {appPath === '/singleplayer' ? (
+                <SinglePlayerPanel currentUserId={currentUserId} onBack={handleOpenHome} />
+              ) : null}
+              {appPath === '/' && view === 'home' ? (
                 <HomePanel
                   createGameOptions={createGameOptions}
                   friends={homeFriendRows}
                   onCreateGame={handleCreateGame}
                   onOpenFriend={handleSelectFriend}
                   onOpenFriends={handleOpenFriends}
+                  onOpenSinglePlayer={handleOpenSinglePlayer}
                   onRefresh={handleHomeRefresh}
                 />
               ) : null}
-              {view === 'friends' ? (
+              {appPath === '/' && view === 'friends' ? (
                 <FriendsPanel friends={friends} onRefresh={refreshAppData} requests={requests} />
               ) : null}
-              {view === 'thread' && profile && selectedThread?.displayRound && !isComposingNextRound ? (
+              {appPath === '/' && view === 'thread' && profile && selectedThread?.displayRound && !isComposingNextRound ? (
                 <PlayRoundPanel
                   currentUserId={currentUserId}
                   onArchiveRound={handleArchiveRound}
@@ -819,7 +890,8 @@ function App() {
                   round={selectedThread.displayRound}
                 />
               ) : null}
-              {view === 'thread' &&
+              {appPath === '/' &&
+              view === 'thread' &&
               profile &&
               selectedThread &&
               (isComposingNextRound || (!selectedThread.displayRound && selectedThread.canCurrentUserStart)) ? (
@@ -831,7 +903,8 @@ function App() {
                   onCreateRound={handleCreateRound}
                 />
               ) : null}
-              {view === 'thread' &&
+              {appPath === '/' &&
+              view === 'thread' &&
               selectedThread &&
               !selectedThread.displayRound &&
               !isComposingNextRound &&

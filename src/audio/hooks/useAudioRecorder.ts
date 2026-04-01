@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getPreferredAudioMimeType } from '../mime';
 
 interface UseAudioRecorderOptions {
+  audioConstraints?: MediaTrackConstraints | boolean;
   prepareOnMount?: boolean;
   preparedStreamIdleMs?: number;
 }
@@ -105,7 +106,11 @@ async function getMicrophonePermissionState(): Promise<MicrophonePermissionState
 export function useAudioRecorder(
   options: UseAudioRecorderOptions = {},
 ): UseAudioRecorderResult {
-  const { prepareOnMount = false, preparedStreamIdleMs = 1500 } = options;
+  const {
+    audioConstraints = true,
+    prepareOnMount = false,
+    preparedStreamIdleMs = 1500,
+  } = options;
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const idleReleaseTimeoutRef = useRef<number | null>(null);
@@ -237,7 +242,9 @@ export function useAudioRecorder(
 
         // Call getUserMedia immediately from the user-triggered path so mobile
         // browsers keep the permission prompt tied to the original gesture.
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints,
+        });
         streamRef.current = stream;
         if (isMountedRef.current) {
           setLiveStream(stream);
@@ -268,6 +275,7 @@ export function useAudioRecorder(
     preparePromiseRef.current = nextPromise;
     await nextPromise;
   }, [
+    audioConstraints,
     permissionState,
     refreshPermissionState,
     releaseRecordingResources,

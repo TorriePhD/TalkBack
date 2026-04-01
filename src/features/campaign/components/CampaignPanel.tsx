@@ -45,6 +45,10 @@ const FLOATING_EGGS = [
   { top: '84%', left: '74%', size: 52, delay: '2.3s' },
 ] as const;
 
+const CAMPAIGN_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
+  channelCount: 1,
+};
+
 function LeaderboardIcon() {
   return (
     <svg aria-hidden="true" className="campaign-side-action-svg" fill="none" viewBox="0 0 24 24">
@@ -188,11 +192,18 @@ function getRoadNodeTop(index: number, total: number) {
 }
 
 export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
-  const originalRecorder = useAudioRecorder({ preparedStreamIdleMs: 0 });
-  const attemptRecorder = useAudioRecorder({ preparedStreamIdleMs: 0 });
+  const originalRecorder = useAudioRecorder({
+    audioConstraints: CAMPAIGN_AUDIO_CONSTRAINTS,
+    preparedStreamIdleMs: 0,
+  });
+  const attemptRecorder = useAudioRecorder({
+    audioConstraints: CAMPAIGN_AUDIO_CONSTRAINTS,
+    preparedStreamIdleMs: 0,
+  });
   const { refreshCoins, setCoinBalance } = useCoins();
   const [campaignState, setCampaignState] = useState<CampaignState | null>(null);
   const [stage, setStage] = useState<CampaignStage>('overview');
+  const [stageChallengeId, setStageChallengeId] = useState<string | null>(null);
   const [isLoadingCampaign, setIsLoadingCampaign] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -212,6 +223,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
 
   const resetFlow = useCallback(() => {
     setStage('overview');
+    setStageChallengeId(null);
     setOriginalRecording(null);
     setGuideRecording(null);
     setAttemptRecording(null);
@@ -344,7 +356,12 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
   const completedCount = campaignState?.progress.completedCount ?? 0;
   const currentChallenge =
     challenges.find((challenge) => challenge.challengeIndex === currentIndex) ?? null;
-  const currentAttemptState = currentChallenge ? campaignState?.attemptState ?? null : null;
+  const activeChallenge =
+    (stageChallengeId
+      ? challenges.find((challenge) => challenge.id === stageChallengeId) ?? null
+      : null) ?? currentChallenge;
+  const currentAttemptState =
+    activeChallenge?.challengeIndex === currentIndex ? campaignState?.attemptState ?? null : null;
   const challengeState = currentChallenge
     ? getChallengeState(currentChallenge.challengeIndex, currentIndex, completedCount)
     : 'completed';
@@ -385,18 +402,38 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
       return;
     }
 
+    setStageChallengeId(currentChallenge.id);
     setError(null);
     setInfo(null);
     setStage('briefing');
   }, [currentChallenge]);
 
   const handleProcessAttempt = useCallback(async () => {
-    if (!currentChallenge || !attemptRecording) {
+    if (!activeChallenge || !attemptRecording) {
       return;
     }
 
-    const costsCoins = isPaidRetry(currentAttemptState);
-    const retryCost = getRetryCost(currentAttemptState);
+    const latestState = (await loadActiveCampaignState(currentUserId)) as CampaignState | null;
+
+    if (latestState) {
+      setCampaignState(latestState);
+    }
+
+    const latestCurrentChallenge =
+      latestState?.challenges.find(
+        (challenge) => challenge.challengeIndex === latestState.progress.currentIndex,
+      ) ?? null;
+    const latestAttemptState =
+      latestCurrentChallenge ? latestState?.attemptState ?? null : currentAttemptState;
+
+    if (!latestCurrentChallenge || latestCurrentChallenge.id !== activeChallenge.id) {
+      resetFlow();
+      setError('This challenge is no longer current. Return to the road and start the current egg.');
+      return;
+    }
+
+    const costsCoins = isPaidRetry(latestAttemptState);
+    const retryCost = getRetryCost(latestAttemptState);
 
     if (costsCoins && typeof window !== 'undefined') {
       const confirmed = window.confirm(`This retry costs ${retryCost} BB Coins. Continue?`);
@@ -411,7 +448,11 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     setInfo(null);
 
     try {
-      const consumeResult = await consumeCampaignAttempt(currentChallenge.id);
+      const nextReversedAttempt = await reverseAudioBlob(attemptRecording);
+      const nextTranscript = await transcribeAudio(nextReversedAttempt);
+      const nextScore = calculateGuessSimilarity(nextTranscript, activeChallenge.phrase);
+      const nextStars = getCampaignStars(nextScore);
+      const consumeResult = await consumeCampaignAttempt(latestCurrentChallenge.id);
       const currentBalance = (consumeResult as { currentBalance?: unknown } | null)?.currentBalance;
 
       if (typeof currentBalance === 'number') {
@@ -420,28 +461,35 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
         await refreshCoins();
       }
 
-      const nextReversedAttempt = await reverseAudioBlob(attemptRecording);
-      const nextTranscript = await transcribeAudio(nextReversedAttempt);
-      const nextScore = calculateGuessSimilarity(nextTranscript, currentChallenge.phrase);
-      const nextStars = getCampaignStars(nextScore);
-      const completionResult = await completeCampaignChallenge({
-        challengeId: currentChallenge.id,
-        stars: nextStars,
-        transcript: nextTranscript,
-        score: nextScore,
-      });
-      const progress =
-        ((completionResult as { progress?: unknown } | null)?.progress ??
-          completionResult) as CampaignState['progress'] | null;
+      const nextAttemptState =
+        ((consumeResult as { attemptState?: unknown } | null)?.attemptState ??
+          consumeResult) as CampaignState['attemptState'];
+      let didClearChallenge = false;
+      let nextProgress: CampaignState['progress'] | null = null;
+      let nextUnlockedPackIds: CampaignState['unlockedPackIds'] | null = null;
+
+      if (nextStars === 3) {
+        const completionResult = await completeCampaignChallenge({
+          challengeId: latestCurrentChallenge.id,
+          stars: nextStars,
+          transcript: nextTranscript,
+          score: nextScore,
+        });
+
+        didClearChallenge = completionResult.advanced;
+        nextProgress = completionResult.progress;
+        nextUnlockedPackIds = completionResult.unlockedPackIds;
+      }
 
       setCampaignState((current) =>
         current
           ? {
               ...current,
-              progress: progress ?? current.progress,
-              attemptState:
-                ((consumeResult as { attemptState?: unknown } | null)?.attemptState ??
-                  consumeResult) as CampaignState['attemptState'],
+              progress: didClearChallenge && nextProgress ? nextProgress : current.progress,
+              attemptState: nextAttemptState,
+              unlockedPackIds: didClearChallenge
+                ? nextUnlockedPackIds ?? current.unlockedPackIds
+                : current.unlockedPackIds,
             }
           : current,
       );
@@ -451,13 +499,17 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
       setStars(nextStars);
       setStage('result');
 
-      if ((consumeResult as { charged?: unknown } | null)?.charged) {
-        setInfo(`Retry charged: -${retryCost} BB Coins.`);
-      }
+      const retryWasCharged = Boolean((consumeResult as { charged?: unknown } | null)?.charged);
 
-      if (nextStars >= 3) {
+      if (didClearChallenge) {
         await refreshCampaign();
-        setInfo('Challenge cleared. The next egg is ready on the road.');
+        setInfo(
+          retryWasCharged
+            ? `Retry charged: -${retryCost} BB Coins. Challenge cleared. The next egg is ready on the road.`
+            : 'Challenge cleared. The next egg is ready on the road.',
+        );
+      } else if (retryWasCharged) {
+        setInfo(`Retry charged: -${retryCost} BB Coins.`);
       }
     } catch (caughtError) {
       setError(
@@ -469,10 +521,12 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     }
   }, [
     attemptRecording,
+    activeChallenge,
     currentAttemptState,
-    currentChallenge,
+    currentUserId,
     refreshCampaign,
     refreshCoins,
+    resetFlow,
     setCoinBalance,
   ]);
 
@@ -518,7 +572,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
   }, [campaignState, leaderboardFriendsOnly, leaderboardOpen]);
 
   const renderChallengeBody = () => {
-    if (!currentChallenge) {
+    if (!activeChallenge) {
       return (
         <div className="campaign-step-stack">
           <div className="campaign-result-card">
@@ -543,10 +597,10 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
         <div className="campaign-step-stack">
           <div className="result-box campaign-phrase-card">
             <span className="campaign-phrase-label">Challenge Phrase</span>
-            <strong>{currentChallenge.phrase}</strong>
+            <strong>{activeChallenge.phrase}</strong>
             <p className="campaign-reverse-example">
-              {currentChallenge.mode === 'reverse_only'
-                ? `Say it backwards out loud. Example: "${currentChallenge.phrase}" -> "${buildBackwardPhraseExample(currentChallenge.phrase)}"`
+              {activeChallenge.mode === 'reverse_only'
+                ? `Say it backwards out loud. Example: "${activeChallenge.phrase}" -> "${buildBackwardPhraseExample(activeChallenge.phrase)}"`
                 : 'Record the phrase normally, listen to the reversed guide, then imitate it.'}
             </p>
           </div>
@@ -564,14 +618,14 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
                 setError(null);
                 setInfo(null);
                 setStage(
-                  currentChallenge.mode === 'reverse_only'
+                  activeChallenge.mode === 'reverse_only'
                     ? 'recording-attempt'
                     : 'recording-original',
                 );
               }}
               type="button"
             >
-              {currentChallenge.mode === 'reverse_only' ? 'Start Reverse Attempt' : 'Start Challenge'}
+              {activeChallenge.mode === 'reverse_only' ? 'Start Reverse Attempt' : 'Start Challenge'}
             </button>
           </div>
         </div>
@@ -583,7 +637,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
         <div className="campaign-step-stack">
           <div className="result-box campaign-phrase-card">
             <span className="campaign-phrase-label">Speak this phrase normally</span>
-            <strong>{currentChallenge.phrase}</strong>
+            <strong>{activeChallenge.phrase}</strong>
           </div>
           <ToggleRecordButton
             disabled={false}
@@ -625,20 +679,20 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     }
 
     if (stage === 'recording-attempt') {
-      const backwardExample = buildBackwardPhraseExample(currentChallenge.phrase);
+      const backwardExample = buildBackwardPhraseExample(activeChallenge.phrase);
 
       return (
         <div className="campaign-step-stack">
           <div className="result-box campaign-phrase-card">
             <span className="campaign-phrase-label">
-              {currentChallenge.mode === 'reverse_only'
+              {activeChallenge.mode === 'reverse_only'
                 ? 'Say this phrase backwards out loud'
                 : 'Imitate the reversed guide'}
             </span>
-            <strong>{currentChallenge.phrase}</strong>
-            {currentChallenge.mode === 'reverse_only' ? (
+            <strong>{activeChallenge.phrase}</strong>
+            {activeChallenge.mode === 'reverse_only' ? (
               <p className="campaign-reverse-example">
-                Example: "{currentChallenge.phrase}" {'->'} "{backwardExample}"
+                Example: "{activeChallenge.phrase}" {'->'} "{backwardExample}"
               </p>
             ) : null}
           </div>
@@ -692,9 +746,9 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
           <div className="campaign-result-card">
             <div className="campaign-result-hero">
               <div>
-                <h3>{stars >= 3 ? 'Challenge Cleared' : 'Try Again'}</h3>
+                <h3>{stars === 3 ? 'Challenge Cleared' : 'Try Again'}</h3>
                 <p>
-                  {stars >= 3
+                  {stars === 3
                     ? 'You earned the full 3 stars and unlocked the next egg.'
                     : 'You need all 3 stars to open the next challenge.'}
                 </p>
@@ -707,7 +761,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
             <div className="campaign-result-metrics">
               <div className="campaign-result-metric">
                 <span>Target Phrase</span>
-                <strong>{currentChallenge.phrase}</strong>
+                <strong>{activeChallenge.phrase}</strong>
               </div>
               <div className="campaign-result-metric">
                 <span>ASR Transcript</span>
@@ -933,10 +987,10 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
             {info ? <div className="success-banner">{info}</div> : null}
             {asrWarmError ? <div className="error-banner">{asrWarmError}</div> : null}
 
-            {currentChallenge ? (
+            {activeChallenge ? (
               <div className="campaign-play-hero">
                 <div className="campaign-play-copy">
-                  <div className="eyebrow">Challenge {currentChallenge.challengeIndex}</div>
+                  <div className="eyebrow">Challenge {activeChallenge.challengeIndex}</div>
                   <h2>{title}</h2>
                   <p>
                     {challengeState === 'current'
@@ -946,17 +1000,17 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
                 </div>
 
                 <div className="campaign-play-badges">
-                  <span className={`badge ${currentChallenge.difficulty}`}>
-                    {formatDifficultyLabel(currentChallenge.difficulty)}
+                  <span className={`badge ${activeChallenge.difficulty}`}>
+                    {formatDifficultyLabel(activeChallenge.difficulty)}
                   </span>
                   <span className="badge attempted">
-                    {currentChallenge.mode === 'reverse_only' ? 'Reverse Only' : 'Normal'}
+                    {activeChallenge.mode === 'reverse_only' ? 'Reverse Only' : 'Normal'}
                   </span>
                 </div>
 
                 <div className="campaign-play-icon">
                   {challengeIcon ? <img alt="" aria-hidden="true" src={challengeIcon} /> : null}
-                  <strong>{currentChallenge.challengeIndex}</strong>
+                  <strong>{activeChallenge.challengeIndex}</strong>
                 </div>
               </div>
             ) : null}

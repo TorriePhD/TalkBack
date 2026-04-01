@@ -3,6 +3,9 @@ import type { AutomaticSpeechRecognitionPipeline } from '@huggingface/transforme
 const WHISPER_MODEL_ID = 'Xenova/whisper-tiny.en';
 const DEBUG_PREFIX = '[Campaign][ASR]';
 const TARGET_SAMPLE_RATE = 16_000;
+const CAMPAIGN_ASR_LANGUAGE = 'english';
+const CAMPAIGN_ASR_TASK = 'transcribe';
+const WHISPER_IS_ENGLISH_ONLY = WHISPER_MODEL_ID.endsWith('.en');
 
 let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
 
@@ -19,9 +22,34 @@ function normalizeTranscriptText(text: string) {
   return text.toLocaleLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+function sanitizeTranscriptText(text: string) {
+  const normalized = normalizeTranscriptText(text);
+
+  if (!normalized || isAnnotationTranscript(normalized)) {
+    return '';
+  }
+
+  return normalized;
+}
+
+function isAnnotationTranscript(text: string) {
+  const normalized = normalizeTranscriptText(text);
+
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    /^\[[^\]]+\]$/i.test(normalized) ||
+    /^\([^)]+\)$/i.test(normalized) ||
+    /\bspeaking in foreign language\b/i.test(normalized) ||
+    /\b(music|applause|silence)\b/i.test(normalized)
+  );
+}
+
 function extractTranscriptionText(output: unknown) {
   if (Array.isArray(output)) {
-    return normalizeTranscriptText(
+    return sanitizeTranscriptText(
       output
         .map((entry) =>
           typeof entry === 'object' && entry && 'text' in entry
@@ -33,7 +61,7 @@ function extractTranscriptionText(output: unknown) {
   }
 
   if (typeof output === 'object' && output && 'text' in output) {
-    return normalizeTranscriptText(String((output as { text?: unknown }).text ?? ''));
+    return sanitizeTranscriptText(String((output as { text?: unknown }).text ?? ''));
   }
 
   return '';
@@ -115,6 +143,8 @@ async function normalizeAudioForWhisper(blob: Blob) {
     sourceFrames: audioBuffer.length,
     outputSampleRate: TARGET_SAMPLE_RATE,
     outputFrames: resampled.length,
+    whisperLanguage: WHISPER_IS_ENGLISH_ONLY ? null : CAMPAIGN_ASR_LANGUAGE,
+    whisperTask: WHISPER_IS_ENGLISH_ONLY ? null : CAMPAIGN_ASR_TASK,
   });
 
   return resampled;
@@ -229,7 +259,7 @@ async function transcribeWithSpeechRecognition(blob: Blob) {
         return;
       }
 
-      resolve(normalizeTranscriptText(value));
+      resolve(sanitizeTranscriptText(value));
     };
 
     recognition.continuous = false;
@@ -298,7 +328,7 @@ async function transcribeWithSpeechRecognition(blob: Blob) {
     }
 
     window.setTimeout(() => {
-      debugLog('Playing reversed attempt into browser speech recognition.');
+      debugLog('Playing reversed imitation into browser speech recognition.');
       void audio.play().catch((error) => {
         try {
           recognition.abort?.();
@@ -330,24 +360,40 @@ export async function transcribeAudio(blob: Blob) {
   try {
     const transcriber = await loadWhisperTranscriber();
     const normalizedAudio = await normalizeAudioForWhisper(blob);
-
-    debugLog('Invoking Whisper transcription with mono float32 PCM audio.');
-    const output = await transcriber(normalizedAudio, {
+    const generationOptions = {
       chunk_length_s: 10,
       stride_length_s: 2,
       return_timestamps: false,
-    });
+      ...(WHISPER_IS_ENGLISH_ONLY
+        ? {}
+        : {
+            language: CAMPAIGN_ASR_LANGUAGE,
+            task: CAMPAIGN_ASR_TASK,
+          }),
+    };
+
+    debugLog('Invoking Whisper transcription with mono float32 PCM audio.');
+    const output = await transcriber(normalizedAudio, generationOptions);
     const transcript = extractTranscriptionText(output);
     debugLog(`Whisper transcription completed in ${Math.round(performance.now() - startedAt)}ms.`, {
       transcript,
     });
 
-    if (transcript) {
-      return transcript;
-    }
+    return transcript;
   } catch (error) {
-    console.warn(`${DEBUG_PREFIX} Whisper transcription failed, falling back to browser speech recognition.`, error);
+    console.warn(`${DEBUG_PREFIX} Whisper transcription failed, attempting browser fallback.`, error);
+    try {
+      const transcript = await transcribeWithSpeechRecognition(blob);
+      debugLog(
+        `Browser fallback transcription completed in ${Math.round(performance.now() - startedAt)}ms.`,
+        {
+          transcript,
+        },
+      );
+      return transcript;
+    } catch (fallbackError) {
+      console.error(`${DEBUG_PREFIX} Browser fallback also failed.`, fallbackError);
+      throw error instanceof Error ? error : new Error('Campaign speech recognition failed.');
+    }
   }
-
-  return transcribeWithSpeechRecognition(blob);
 }

@@ -3,6 +3,13 @@ import type { WordDifficulty } from '../../utils/difficulty';
 export type RoundStatus = 'waiting_for_attempt' | 'attempted' | 'complete';
 export type RoundStarCount = 0 | 1 | 2 | 3;
 
+export interface RewardSequenceReward {
+  id: string;
+  stars: RoundStarCount;
+  difficulty: WordDifficulty;
+  rewardAmount: number;
+}
+
 export interface FriendThreadStats {
   completedRoundCount: number;
   averageStars?: number | null;
@@ -18,13 +25,9 @@ export interface ArchiveCompletedRoundSummary extends FriendThreadStats {
   recipientId: string;
 }
 
-export interface RoundReward {
-  id: string;
+export interface RoundReward extends RewardSequenceReward {
   roundId: string;
   userId: string;
-  stars: RoundStarCount;
-  difficulty: WordDifficulty;
-  rewardAmount: number;
   claimed: boolean;
   createdAt: string;
 }

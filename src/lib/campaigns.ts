@@ -73,6 +73,15 @@ export interface CampaignCompletionResult {
   newlyUnlockedPackIds: string[];
   campaignComplete: boolean;
   advanced: boolean;
+  rewardAmount: number;
+  currentBalance: number | null;
+}
+
+export interface CampaignAttemptRewardResult {
+  challengeId: string;
+  userId: string;
+  rewardAmount: number;
+  currentBalance: number | null;
 }
 
 interface CachedPayload<T> {
@@ -162,6 +171,28 @@ interface CampaignCompletionRow {
   result_campaign_complete?: boolean;
   advanced?: boolean;
   result_advanced?: boolean;
+  reward_amount?: number;
+  result_reward_amount?: number;
+  current_balance?: number;
+  result_current_balance?: number;
+}
+
+interface CampaignAttemptRewardRow {
+  challenge_id?: string;
+  result_challenge_id?: string;
+  user_id?: string;
+  result_user_id?: string;
+  reward_amount?: number;
+  result_reward_amount?: number;
+  current_balance?: number;
+  result_current_balance?: number;
+}
+
+interface SupabaseRpcErrorLike {
+  message: string;
+  details?: string | null;
+  hint?: string | null;
+  code?: string | null;
 }
 
 function requireSupabase() {
@@ -184,6 +215,50 @@ function isMissingRpcFunctionError(message: string, functionName: string) {
 
 function buildMissingCampaignMigrationError(message: string) {
   return `Campaign RPCs are not available on the connected Supabase project yet. Apply the latest campaign migrations with \`supabase db push\`. Original error: ${message}`;
+}
+
+function formatSupabaseRpcError(
+  functionName: string,
+  fallbackPrefix: string,
+  error: SupabaseRpcErrorLike,
+) {
+  const message = error.message?.trim() || fallbackPrefix;
+  const details = error.details?.trim();
+  const hint = error.hint?.trim();
+  const code = error.code?.trim();
+  const parts = [message];
+
+  if (details && details !== message) {
+    parts.push(`Details: ${details}`);
+  }
+
+  if (hint) {
+    parts.push(`Hint: ${hint}`);
+  }
+
+  if (
+    functionName === 'consume_campaign_attempt' &&
+    /need 10 bb coins/i.test(message)
+  ) {
+    parts.push(
+      'The connected Supabase project is still using the older campaign retry RPC. Apply the latest campaign migrations with `supabase db push`.',
+    );
+  }
+
+  if (
+    functionName === 'consume_campaign_attempt' &&
+    /need 5 bb coins/i.test(message)
+  ) {
+    parts.push(
+      'This means the backend believes your free tries are already used for today and the next retry is paid.',
+    );
+  }
+
+  if (code) {
+    parts.push(`Code: ${code}`);
+  }
+
+  return parts.join(' ');
 }
 
 function readCachedPayload<T>(key: string): T | null {
@@ -319,6 +394,8 @@ function mapCompletionRow(row: CampaignCompletionRow): CampaignCompletionResult 
   const userId = row.user_id ?? row.result_user_id ?? '';
   const currentIndex = row.current_index ?? row.result_current_index ?? 1;
   const completedCount = row.completed_count ?? row.result_completed_count ?? 0;
+  const rewardAmount = row.reward_amount ?? row.result_reward_amount ?? 0;
+  const currentBalance = row.current_balance ?? row.result_current_balance ?? null;
 
   return {
     campaignId,
@@ -334,6 +411,17 @@ function mapCompletionRow(row: CampaignCompletionRow): CampaignCompletionResult 
       row.newly_unlocked_pack_ids ?? row.result_newly_unlocked_pack_ids ?? [],
     campaignComplete: row.campaign_complete ?? row.result_campaign_complete ?? false,
     advanced: row.advanced ?? row.result_advanced ?? false,
+    rewardAmount,
+    currentBalance,
+  };
+}
+
+function mapAttemptRewardRow(row: CampaignAttemptRewardRow): CampaignAttemptRewardResult {
+  return {
+    challengeId: row.challenge_id ?? row.result_challenge_id ?? '',
+    userId: row.user_id ?? row.result_user_id ?? '',
+    rewardAmount: row.reward_amount ?? row.result_reward_amount ?? 0,
+    currentBalance: row.current_balance ?? row.result_current_balance ?? null,
   };
 }
 
@@ -389,7 +477,11 @@ export async function loadActiveCampaignState(
     throw new Error(
       isMissingRpcFunctionError(error.message, 'get_active_campaign_state')
         ? buildMissingCampaignMigrationError(error.message)
-        : `Unable to load the active campaign state: ${error.message}`,
+        : formatSupabaseRpcError(
+            'get_active_campaign_state',
+            'Unable to load the active campaign state.',
+            error,
+          ),
     );
   }
 
@@ -455,7 +547,11 @@ export async function consumeCampaignAttempt(
     throw new Error(
       isMissingRpcFunctionError(error.message, 'consume_campaign_attempt')
         ? buildMissingCampaignMigrationError(error.message)
-        : `Unable to consume the campaign attempt: ${error.message}`,
+        : formatSupabaseRpcError(
+            'consume_campaign_attempt',
+            'Unable to consume the campaign attempt.',
+            error,
+          ),
     );
   }
 
@@ -493,7 +589,11 @@ export async function completeCampaignChallenge(input: {
     throw new Error(
       isMissingRpcFunctionError(error.message, 'complete_campaign_challenge')
         ? buildMissingCampaignMigrationError(error.message)
-        : `Unable to complete the campaign challenge: ${error.message}`,
+        : formatSupabaseRpcError(
+            'complete_campaign_challenge',
+            'Unable to complete the campaign challenge.',
+            error,
+          ),
     );
   }
 
@@ -508,6 +608,46 @@ export async function completeCampaignChallenge(input: {
   clearWordPackUnlockCache(currentUserId);
 
   return mapCompletionRow(row);
+}
+
+export async function awardCampaignAttemptReward(input: {
+  challengeId: string;
+  stars: number;
+  score: number;
+}): Promise<CampaignAttemptRewardResult> {
+  const normalizedChallengeId = input.challengeId.trim();
+
+  if (!normalizedChallengeId) {
+    throw new Error('A challenge id is required to award a campaign attempt reward.');
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('award_campaign_attempt_reward', {
+    reward_challenge_id: normalizedChallengeId,
+    stars_input: input.stars,
+    transcript_input: '',
+    score_input: input.score,
+  });
+
+  if (error) {
+    throw new Error(
+      isMissingRpcFunctionError(error.message, 'award_campaign_attempt_reward')
+        ? buildMissingCampaignMigrationError(error.message)
+        : formatSupabaseRpcError(
+            'award_campaign_attempt_reward',
+            'Unable to award the campaign attempt reward.',
+            error,
+          ),
+    );
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as CampaignAttemptRewardRow | null;
+
+  if (!row) {
+    throw new Error('Unable to award the campaign attempt reward.');
+  }
+
+  return mapAttemptRewardRow(row);
 }
 
 export async function listCampaignLeaderboard(
@@ -532,7 +672,11 @@ export async function listCampaignLeaderboard(
     throw new Error(
       isMissingRpcFunctionError(error.message, 'list_campaign_leaderboard')
         ? buildMissingCampaignMigrationError(error.message)
-        : `Unable to load the campaign leaderboard: ${error.message}`,
+        : formatSupabaseRpcError(
+            'list_campaign_leaderboard',
+            'Unable to load the campaign leaderboard.',
+            error,
+          ),
     );
   }
 

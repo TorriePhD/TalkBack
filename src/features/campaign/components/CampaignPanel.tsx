@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioRecorder } from '../../../audio/hooks/useAudioRecorder';
 import { reverseAudioBlob } from '../../../audio/utils/reverseAudioBlob';
 import { AudioPlayerCard } from '../../../components/AudioPlayerCard';
 import { StarRating } from '../../../components/StarRating';
 import { ToggleRecordButton } from '../../../components/ToggleRecordButton';
 import { WaveformLoader } from '../../../components/WaveformLoader';
+import { RoundRewardSequence } from '../../rounds/components/RoundRewardSequence';
+import type { RewardSequenceReward } from '../../rounds/types';
 import {
+  awardCampaignAttemptReward,
   completeCampaignChallenge,
   consumeCampaignAttempt,
   listCampaignLeaderboard,
@@ -29,10 +32,17 @@ type CampaignStage =
   | 'recording-attempt'
   | 'attempt-ready'
   | 'processing'
-  | 'result';
+  | 'result'
+  | 'reward';
 
 type CampaignState = NonNullable<Awaited<ReturnType<typeof loadActiveCampaignState>>>;
 type CampaignChallenge = CampaignState['challenges'][number];
+type CampaignAttemptState = CampaignState['attempts'][number];
+
+interface CampaignRewardReveal extends RewardSequenceReward {
+  currentBalance: number;
+  advanced: boolean;
+}
 
 const FLOATING_EGGS = [
   { top: '5%', left: '4%', size: 36, delay: '0s' },
@@ -111,6 +121,16 @@ function getFreeTriesRemaining(attemptState: unknown) {
 
 function requiresRetryCharge(attemptState: unknown) {
   return getFreeTriesRemaining(attemptState) === 0;
+}
+
+function hasEnoughCoinsForRetry(attemptState: CampaignAttemptState | null, fallbackCoins: number) {
+  if (!requiresRetryCharge(attemptState)) {
+    return true;
+  }
+
+  const retryCost = getRetryCost(attemptState);
+  const currentBalance = attemptState?.currentBalance ?? fallbackCoins;
+  return currentBalance >= retryCost;
 }
 
 function getChallengeState(index: number, currentIndex: number, completedCount: number) {
@@ -227,7 +247,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     audioConstraints: CAMPAIGN_AUDIO_CONSTRAINTS,
     preparedStreamIdleMs: 0,
   });
-  const { refreshCoins, setCoinBalance } = useCoins();
+  const { coins, refreshCoins, setCoinBalance, setCoinPreview } = useCoins();
   const [campaignState, setCampaignState] = useState<CampaignState | null>(null);
   const [stage, setStage] = useState<CampaignStage>('overview');
   const [stageChallengeId, setStageChallengeId] = useState<string | null>(null);
@@ -238,8 +258,9 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
   const [guideRecording, setGuideRecording] = useState<Blob | null>(null);
   const [attemptRecording, setAttemptRecording] = useState<Blob | null>(null);
   const [reversedAttemptRecording, setReversedAttemptRecording] = useState<Blob | null>(null);
-  const [score, setScore] = useState(0);
   const [stars, setStars] = useState(0);
+  const [campaignReward, setCampaignReward] = useState<CampaignRewardReveal | null>(null);
+  const [isAnimatingReward, setIsAnimatingReward] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [leaderboardFriendsOnly, setLeaderboardFriendsOnly] = useState(false);
   const [leaderboardEntries, setLeaderboardEntries] = useState<Array<Record<string, unknown>>>([]);
@@ -251,6 +272,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     charged: boolean;
     cost: number;
   } | null>(null);
+  const rewardBaseCoinsRef = useRef(0);
 
   const resetFlow = useCallback(() => {
     setStage('overview');
@@ -259,19 +281,25 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     setGuideRecording(null);
     setAttemptRecording(null);
     setReversedAttemptRecording(null);
-    setScore(0);
     setStars(0);
+    setCampaignReward(null);
+    setIsAnimatingReward(false);
     setActiveAttemptCharge(null);
     setIsStartingAttempt(false);
     setError(null);
     setInfo(null);
+    setCoinPreview(null);
     originalRecorder.clearRecording();
     attemptRecorder.clearRecording();
-  }, [attemptRecorder, originalRecorder]);
+  }, [attemptRecorder, originalRecorder, setCoinPreview]);
 
-  const refreshCampaign = useCallback(async () => {
+  const refreshCampaign = useCallback(async (options?: { clearError?: boolean }) => {
+    const shouldClearError = options?.clearError ?? true;
     setIsLoadingCampaign(true);
-    setError(null);
+
+    if (shouldClearError) {
+      setError(null);
+    }
 
     try {
       const nextState = (await loadActiveCampaignState(currentUserId)) as CampaignState | null;
@@ -290,6 +318,28 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
   useEffect(() => {
     void refreshCampaign();
   }, [refreshCampaign]);
+
+  useEffect(() => () => {
+    setCoinPreview(null);
+  }, [setCoinPreview]);
+
+  useEffect(() => {
+    if (error) {
+      console.error('[CampaignPanel]', error);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (asrWarmError) {
+      console.error('[CampaignPanel][ASR]', asrWarmError);
+    }
+  }, [asrWarmError]);
+
+  useEffect(() => {
+    if (leaderboardError) {
+      console.error('[CampaignPanel][Leaderboard]', leaderboardError);
+    }
+  }, [leaderboardError]);
 
   useEffect(() => {
     let cancelled = false;
@@ -411,6 +461,17 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
   const currentRetryCost = requiresRetryCharge(currentAttemptState)
     ? getRetryCost(currentAttemptState)
     : null;
+  const canStartRetry = hasEnoughCoinsForRetry(currentAttemptState, coins);
+  const updateRewardPreview = useCallback(
+    (nextDisplayedCoins: number) => {
+      setCoinPreview(nextDisplayedCoins);
+    },
+    [setCoinPreview],
+  );
+  const handleRewardAnimationComplete = useCallback(() => {
+    setIsAnimatingReward(false);
+    setCoinPreview(null);
+  }, [setCoinPreview]);
 
   const startOriginalRecording = useCallback(async () => {
     await originalRecorder.prepareRecording();
@@ -427,11 +488,13 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     setInfo(null);
     setAttemptRecording(null);
     setReversedAttemptRecording(null);
-    setScore(0);
     setStars(0);
+    setCampaignReward(null);
+    setIsAnimatingReward(false);
+    setCoinPreview(null);
     attemptRecorder.clearRecording();
     setStage('recording-attempt');
-  }, [attemptRecorder]);
+  }, [attemptRecorder, setCoinPreview]);
 
   const startCampaignAttempt = useCallback(
     async (
@@ -478,8 +541,10 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
         setStageChallengeId(challenge.id);
         setAttemptRecording(null);
         setReversedAttemptRecording(null);
-        setScore(0);
         setStars(0);
+        setCampaignReward(null);
+        setIsAnimatingReward(false);
+        setCoinPreview(null);
         attemptRecorder.clearRecording();
 
         if (nextStage === 'recording-original') {
@@ -495,22 +560,34 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
         setInfo(attemptWasCharged ? `Retry charged: -${retryCost} BB Coins.` : null);
         setStage(nextStage);
       } catch (caughtError) {
-        setError(
+        const nextError =
           caughtError instanceof Error
             ? caughtError.message
-            : 'Unable to start this campaign attempt.',
+            : 'Unable to start this campaign attempt.';
+
+        setError(
+          nextError,
         );
 
         try {
-          await refreshCampaign();
+          await refreshCampaign({ clearError: false });
         } catch {
           // Keep the original start error visible if the refresh also fails.
         }
+
+        setError((current) => current ?? nextError);
       } finally {
         setIsStartingAttempt(false);
       }
     },
-    [attemptRecorder, originalRecorder, refreshCampaign, refreshCoins, setCoinBalance],
+    [
+      attemptRecorder,
+      originalRecorder,
+      refreshCampaign,
+      refreshCoins,
+      setCoinBalance,
+      setCoinPreview,
+    ],
   );
 
   const openChallengeBriefing = useCallback(() => {
@@ -529,19 +606,29 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
       return;
     }
 
+    if (!hasEnoughCoinsForRetry(currentAttemptState, coins)) {
+      setError(`You need ${getRetryCost(currentAttemptState)} BB Coins for another campaign retry.`);
+      return;
+    }
+
     void startCampaignAttempt(
       activeChallenge,
       activeChallenge.mode === 'reverse_only' ? 'recording-attempt' : 'recording-original',
     );
-  }, [activeChallenge, isStartingAttempt, startCampaignAttempt]);
+  }, [activeChallenge, coins, currentAttemptState, isStartingAttempt, startCampaignAttempt]);
 
   const startRetryAttempt = useCallback(() => {
     if (!activeChallenge || isStartingAttempt) {
       return;
     }
 
+    if (!hasEnoughCoinsForRetry(currentAttemptState, coins)) {
+      setError(`You need ${getRetryCost(currentAttemptState)} BB Coins for another campaign retry.`);
+      return;
+    }
+
     void startCampaignAttempt(activeChallenge, 'recording-attempt');
-  }, [activeChallenge, isStartingAttempt, startCampaignAttempt]);
+  }, [activeChallenge, coins, currentAttemptState, isStartingAttempt, startCampaignAttempt]);
 
   const handleProcessAttempt = useCallback(async () => {
     if (!activeChallenge || !attemptRecording) {
@@ -557,7 +644,14 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
       const attemptScoreResult = await scoreAudio(processedAttemptAudio, activeChallenge.phrase);
       const nextScore = attemptScoreResult.score;
       const nextStars = attemptScoreResult.stars;
-      let didClearChallenge = false;
+      let rewardResult: {
+        challengeId: string;
+        rewardAmount: number;
+        currentBalance: number | null;
+        advanced: boolean;
+      };
+
+      rewardBaseCoinsRef.current = coins;
 
       if (nextStars === 3) {
         const completionResult = await completeCampaignChallenge({
@@ -566,23 +660,75 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
           score: nextScore,
         });
 
-        didClearChallenge = completionResult.advanced;
+        rewardResult = {
+          challengeId: completionResult.challengeId,
+          rewardAmount: completionResult.rewardAmount,
+          currentBalance: completionResult.currentBalance,
+          advanced: completionResult.advanced,
+        };
+
+        const refreshedCampaignState = await refreshCampaign();
+
+        if (!refreshedCampaignState) {
+          console.warn('Unable to refresh campaign state after clearing a challenge.');
+        }
+      } else {
+        const attemptRewardResult = await awardCampaignAttemptReward({
+          challengeId: activeChallenge.id,
+          stars: nextStars,
+          score: nextScore,
+        });
+
+        rewardResult = {
+          challengeId: attemptRewardResult.challengeId,
+          rewardAmount: attemptRewardResult.rewardAmount,
+          currentBalance: attemptRewardResult.currentBalance,
+          advanced: false,
+        };
       }
 
       setReversedAttemptRecording(nextReversedAttempt);
-      setScore(nextScore);
       setStars(nextStars);
-      setStage('result');
 
-      if (didClearChallenge) {
-        await refreshCampaign();
+      let nextBalance = rewardResult.currentBalance;
+
+      if (nextBalance === null) {
+        try {
+          nextBalance = await refreshCoins();
+        } catch (refreshError) {
+          console.warn('Unable to refresh BB Coins after completing a campaign challenge.', refreshError);
+        }
+      }
+
+      const resolvedBalance = nextBalance ?? rewardBaseCoinsRef.current + rewardResult.rewardAmount;
+
+      setCampaignReward({
+        id: `campaign-reward-${rewardResult.challengeId}`,
+        stars: nextStars as CampaignRewardReveal['stars'],
+        difficulty: activeChallenge.difficulty,
+        rewardAmount: rewardResult.rewardAmount,
+        currentBalance: resolvedBalance,
+        advanced: rewardResult.advanced,
+      });
+      setIsAnimatingReward(true);
+      setCoinBalance(resolvedBalance);
+      updateRewardPreview(rewardBaseCoinsRef.current);
+      setStage('reward');
+
+      if (rewardResult.advanced) {
         setInfo(
           activeAttemptCharge?.charged
-            ? `Retry charged: -${activeAttemptCharge.cost} BB Coins. Challenge cleared. The next egg is ready on the road.`
-            : 'Challenge cleared. The next egg is ready on the road.',
+            ? `Retry charged: -${activeAttemptCharge.cost} BB Coins. Challenge cleared for +${rewardResult.rewardAmount} BB Coins. The next egg is ready on the road.`
+            : `Challenge cleared for +${rewardResult.rewardAmount} BB Coins. The next egg is ready on the road.`,
         );
       } else if (activeAttemptCharge?.charged) {
-        setInfo(`Retry charged: -${activeAttemptCharge.cost} BB Coins.`);
+        setInfo(
+          `Retry charged: -${activeAttemptCharge.cost} BB Coins. You earned +${rewardResult.rewardAmount} BB Coins, but you still need 3 stars to unlock the next egg.`,
+        );
+      } else {
+        setInfo(
+          `You earned +${rewardResult.rewardAmount} BB Coins, but you still need 3 stars to unlock the next egg.`,
+        );
       }
     } catch (caughtError) {
       setError(
@@ -596,7 +742,12 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     attemptRecording,
     activeChallenge,
     activeAttemptCharge,
+    coins,
     refreshCampaign,
+    refreshCoins,
+    setCoinBalance,
+    setCoinPreview,
+    updateRewardPreview,
   ]);
 
   useEffect(() => {
@@ -683,7 +834,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
             </button>
             <button
               className="button primary"
-              disabled={isStartingAttempt}
+              disabled={isStartingAttempt || !canStartRetry}
               onClick={startChallengeFromBriefing}
               type="button"
             >
@@ -806,6 +957,87 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
       );
     }
 
+    if (stage === 'reward' && campaignReward) {
+      const rewardSummary = campaignReward.advanced
+        ? 'The next egg is ready on the road.'
+        : 'You still need 3 stars to unlock the next egg.';
+      const rewardDetail =
+        campaignReward.rewardAmount > 0
+          ? `+${campaignReward.rewardAmount} BB Coins added from this attempt.`
+          : 'No BB Coins were awarded from this attempt.';
+
+      return (
+        <div className="campaign-step-stack reward-stage-step">
+          <RoundRewardSequence
+            baseCoins={rewardBaseCoinsRef.current}
+            onAnimationComplete={handleRewardAnimationComplete}
+            onDisplayedCoinsChange={updateRewardPreview}
+            reward={campaignReward}
+            startCompleted={!isAnimatingReward}
+          >
+            <div className="reward-reveal-details">
+              <p>
+                <strong>{campaignReward.advanced ? 'Challenge cleared.' : 'Attempt scored.'}</strong>{' '}
+                {rewardSummary}
+              </p>
+              <p>{rewardDetail}</p>
+            </div>
+            <div className="reward-sequence-total">
+              <span className="reward-sequence-total-label">Total BB Coins</span>
+              <strong className="reward-sequence-total-value">
+                {campaignReward.currentBalance.toLocaleString()}
+              </strong>
+              <span className="reward-sequence-total-gain">
+                +{campaignReward.rewardAmount.toLocaleString()} reward
+              </span>
+            </div>
+            <div className="audio-grid">
+              <AudioPlayerCard
+                blob={attemptRecording}
+                description="Your recorded attempt."
+                title="Attempt Audio"
+              />
+              <AudioPlayerCard
+                blob={reversedAttemptRecording}
+                description="This reversed clip was converted back to forward speech and scored in the browser."
+                title="Scoring Audio"
+              />
+            </div>
+            <div className="button-row">
+              {!campaignReward.advanced ? (
+                <button
+                  className="button secondary"
+                  disabled={isAnimatingReward || isStartingAttempt}
+                  onClick={resetFlow}
+                  type="button"
+                >
+                  Back To Road
+                </button>
+              ) : null}
+              <button
+                className="button primary"
+                disabled={
+                  isAnimatingReward ||
+                  isStartingAttempt ||
+                  (!campaignReward.advanced && !canStartRetry)
+                }
+                onClick={campaignReward.advanced ? resetFlow : startRetryAttempt}
+                type="button"
+              >
+                {campaignReward.advanced ? (
+                  'Back To Road'
+                ) : isStartingAttempt ? (
+                  'Starting...'
+                ) : (
+                  <CampaignActionLabel label="Try Again" retryCost={currentRetryCost} />
+                )}
+              </button>
+            </div>
+          </RoundRewardSequence>
+        </div>
+      );
+    }
+
     if (stage === 'result') {
       return (
         <div className="campaign-step-stack">
@@ -844,7 +1076,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
             {stars < 3 ? (
               <button
                 className="button primary"
-                disabled={isStartingAttempt}
+                disabled={isStartingAttempt || !canStartRetry}
                 onClick={startRetryAttempt}
                 type="button"
               >
@@ -902,9 +1134,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
               </button>
             </div>
 
-            {error ? <div className="error-banner">{error}</div> : null}
             {info ? <div className="success-banner">{info}</div> : null}
-            {asrWarmError ? <div className="error-banner">{asrWarmError}</div> : null}
 
             {isLoadingCampaign ? (
               <div className="round-loader-callout" aria-live="polite" role="status">
@@ -1011,7 +1241,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
             <div className="campaign-topbar">
               <button
                 className="button ghost round-screen-back"
-                disabled={stage === 'processing'}
+                disabled={stage === 'processing' || (stage === 'reward' && isAnimatingReward)}
                 onClick={resetFlow}
                 type="button"
               >
@@ -1019,9 +1249,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
               </button>
             </div>
 
-            {error ? <div className="error-banner">{error}</div> : null}
             {info ? <div className="success-banner">{info}</div> : null}
-            {asrWarmError ? <div className="error-banner">{asrWarmError}</div> : null}
 
             {activeChallenge ? (
               <div className="campaign-play-hero">
@@ -1029,9 +1257,13 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
                   <div className="eyebrow">Challenge {activeChallenge.challengeIndex}</div>
                   <h2>{title}</h2>
                   <p>
-                    {challengeState === 'current'
-                      ? 'This is your next live challenge. Finish it with 3 stars to unlock the next egg.'
-                      : 'Campaign progress has already moved past this challenge.'}
+                    {stage === 'reward'
+                      ? campaignReward?.advanced
+                        ? 'Reward reveal for the challenge you just cleared.'
+                        : 'Reward reveal for your latest attempt. You still need 3 stars to unlock the next egg.'
+                      : challengeState === 'current'
+                        ? 'This is your next live challenge. Finish it with 3 stars to unlock the next egg.'
+                        : 'Campaign progress has already moved past this challenge.'}
                   </p>
                 </div>
 
@@ -1095,8 +1327,6 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
                 Friends
               </button>
             </div>
-
-            {leaderboardError ? <div className="error-banner">{leaderboardError}</div> : null}
 
             {isLoadingLeaderboard ? (
               <div className="round-loader-callout" aria-live="polite" role="status">

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { StarRating } from '../../../components/StarRating';
 import { difficultyMultiplier } from '../../../lib/rounds';
-import type { RoundReward } from '../types';
+import type { RewardSequenceReward } from '../types';
 
 interface RoundRewardSequenceProps {
   baseCoins: number;
-  reward: RoundReward;
+  reward: RewardSequenceReward;
   onDisplayedCoinsChange: (amount: number) => void;
   onAnimationComplete?: () => void;
   startCompleted?: boolean;
@@ -67,7 +67,7 @@ function quadraticBezier(start: number, control: number, end: number, progress: 
   );
 }
 
-function getDifficultyLabel(difficulty: RoundReward['difficulty']) {
+function getDifficultyLabel(difficulty: RewardSequenceReward['difficulty']) {
   return difficulty.toUpperCase();
 }
 

@@ -25,15 +25,15 @@ function normalizePhraseText(text: string) {
 }
 
 function getStars(score: number) {
-  if (score >= 0.9) {
+  if (score > 0.03) {
     return 3;
   }
 
-  if (score >= 0.75) {
+  if (score > 0.02) {
     return 2;
   }
 
-  if (score >= 0.6) {
+  if (score > 0.01) {
     return 1;
   }
 

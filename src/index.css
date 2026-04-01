@@ -854,7 +854,7 @@ p {
   padding: 20px;
   overflow: hidden;
   position: relative;
-  touch-action: pan-x;
+  touch-action: pan-y;
 }
 
 .home-refresh-indicator {

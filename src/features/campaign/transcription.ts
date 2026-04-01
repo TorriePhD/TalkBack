@@ -6,6 +6,11 @@ const TARGET_SAMPLE_RATE = 16_000;
 const CAMPAIGN_ASR_LANGUAGE = 'english';
 const CAMPAIGN_ASR_TASK = 'transcribe';
 const WHISPER_IS_ENGLISH_ONLY = WHISPER_MODEL_ID.endsWith('.en');
+const TARGET_PEAK_LEVEL = 0.92;
+const SILENCE_TRIM_FLOOR = 0.003;
+const SILENCE_TRIM_RATIO = 0.08;
+const SILENCE_TRIM_PADDING_MS = 120;
+const MIN_TRIMMED_AUDIO_MS = 250;
 
 let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
 
@@ -48,6 +53,10 @@ function isAnnotationTranscript(text: string) {
 }
 
 function extractTranscriptionText(output: unknown) {
+  if (typeof output === 'string') {
+    return sanitizeTranscriptText(output);
+  }
+
   if (Array.isArray(output)) {
     return sanitizeTranscriptText(
       output
@@ -65,6 +74,102 @@ function extractTranscriptionText(output: unknown) {
   }
 
   return '';
+}
+
+function getPeakLevel(samples: Float32Array) {
+  let peak = 0;
+
+  for (let index = 0; index < samples.length; index += 1) {
+    peak = Math.max(peak, Math.abs(samples[index] ?? 0));
+  }
+
+  return peak;
+}
+
+function trimSilentEdges(samples: Float32Array, sampleRate: number) {
+  const peak = getPeakLevel(samples);
+
+  if (peak <= 0) {
+    return {
+      samples,
+      trimmed: false,
+      threshold: 0,
+      startFrame: 0,
+      endFrame: samples.length,
+    };
+  }
+
+  const threshold = Math.max(SILENCE_TRIM_FLOOR, peak * SILENCE_TRIM_RATIO);
+  let startFrame = 0;
+  let endFrame = samples.length - 1;
+
+  while (startFrame < samples.length && Math.abs(samples[startFrame] ?? 0) < threshold) {
+    startFrame += 1;
+  }
+
+  while (endFrame >= startFrame && Math.abs(samples[endFrame] ?? 0) < threshold) {
+    endFrame -= 1;
+  }
+
+  if (startFrame === 0 && endFrame === samples.length - 1) {
+    return {
+      samples,
+      trimmed: false,
+      threshold,
+      startFrame: 0,
+      endFrame: samples.length,
+    };
+  }
+
+  const paddingFrames = Math.round((sampleRate * SILENCE_TRIM_PADDING_MS) / 1000);
+  const paddedStartFrame = Math.max(0, startFrame - paddingFrames);
+  const paddedEndFrame = Math.min(samples.length, endFrame + paddingFrames + 1);
+  const trimmedSamples = samples.slice(paddedStartFrame, paddedEndFrame);
+  const minimumLength = Math.round((sampleRate * MIN_TRIMMED_AUDIO_MS) / 1000);
+
+  if (trimmedSamples.length < minimumLength) {
+    return {
+      samples,
+      trimmed: false,
+      threshold,
+      startFrame: 0,
+      endFrame: samples.length,
+    };
+  }
+
+  return {
+    samples: trimmedSamples,
+    trimmed: true,
+    threshold,
+    startFrame: paddedStartFrame,
+    endFrame: paddedEndFrame,
+  };
+}
+
+function normalizePeakLevel(samples: Float32Array) {
+  const peak = getPeakLevel(samples);
+
+  if (peak <= 0 || peak >= TARGET_PEAK_LEVEL) {
+    return {
+      samples,
+      originalPeak: peak,
+      appliedGain: 1,
+    };
+  }
+
+  const gain = TARGET_PEAK_LEVEL / peak;
+  const leveledSamples = new Float32Array(samples.length);
+
+  for (let index = 0; index < samples.length; index += 1) {
+    const nextValue = (samples[index] ?? 0) * gain;
+    leveledSamples[index] = Math.max(-1, Math.min(1, nextValue));
+  }
+
+  return {
+    samples: leveledSamples,
+    originalPeak: peak,
+    appliedGain: gain,
+  };
 }
 
 async function decodeAudioBlob(blob: Blob) {
@@ -132,15 +237,34 @@ function resampleFloat32Linear(samples: Float32Array, sourceSampleRate: number, 
   return output;
 }
 
-async function normalizeAudioForWhisper(blob: Blob) {
+async function normalizeAudioForWhisper(
+  blob: Blob,
+  options: {
+    trimSilence?: boolean;
+  } = {},
+) {
   const audioBuffer = await decodeAudioBlob(blob);
   const mono = mixToMono(audioBuffer);
-  const resampled = resampleFloat32Linear(mono, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
+  const trimmedAudio = options.trimSilence ? trimSilentEdges(mono, audioBuffer.sampleRate) : null;
+  const speechFocusedSamples = trimmedAudio?.samples ?? mono;
+  const leveledAudio = normalizePeakLevel(speechFocusedSamples);
+  const resampled = resampleFloat32Linear(
+    leveledAudio.samples,
+    audioBuffer.sampleRate,
+    TARGET_SAMPLE_RATE,
+  );
 
   debugLog('Normalized audio for Whisper.', {
     sourceChannels: audioBuffer.numberOfChannels,
     sourceSampleRate: audioBuffer.sampleRate,
     sourceFrames: audioBuffer.length,
+    trimSilence: options.trimSilence ?? false,
+    trimApplied: trimmedAudio?.trimmed ?? false,
+    trimThreshold: trimmedAudio?.threshold ?? null,
+    trimStartFrame: trimmedAudio?.startFrame ?? 0,
+    trimEndFrame: trimmedAudio?.endFrame ?? mono.length,
+    leveledPeak: leveledAudio.originalPeak,
+    appliedGain: leveledAudio.appliedGain,
     outputSampleRate: TARGET_SAMPLE_RATE,
     outputFrames: resampled.length,
     whisperLanguage: WHISPER_IS_ENGLISH_ONLY ? null : CAMPAIGN_ASR_LANGUAGE,
@@ -350,6 +474,53 @@ export async function warmCampaignTranscriber() {
   await loadWhisperTranscriber();
 }
 
+async function transcribeWithWhisper(
+  blob: Blob,
+  options: {
+    attemptLabel: string;
+    chunkLengthS?: number;
+    strideLengthS?: number;
+    trimSilence?: boolean;
+  },
+) {
+  const transcriber = await loadWhisperTranscriber();
+  const normalizedAudio = await normalizeAudioForWhisper(blob, {
+    trimSilence: options.trimSilence,
+  });
+  const generationOptions = {
+    return_timestamps: false,
+    ...(options.chunkLengthS && options.chunkLengthS > 0
+      ? {
+          chunk_length_s: options.chunkLengthS,
+          stride_length_s: options.strideLengthS ?? 2,
+        }
+      : {}),
+    ...(WHISPER_IS_ENGLISH_ONLY
+      ? {}
+      : {
+          language: CAMPAIGN_ASR_LANGUAGE,
+          task: CAMPAIGN_ASR_TASK,
+        }),
+  };
+
+  debugLog('Invoking Whisper transcription with mono float32 PCM audio.', {
+    attemptLabel: options.attemptLabel,
+    trimSilence: options.trimSilence ?? false,
+    generationOptions,
+  });
+
+  const output = await transcriber(normalizedAudio, generationOptions);
+  const transcript = extractTranscriptionText(output);
+
+  debugLog('Whisper transcription attempt completed.', {
+    attemptLabel: options.attemptLabel,
+    transcript,
+    rawOutput: transcript ? undefined : output,
+  });
+
+  return transcript;
+}
+
 export async function transcribeAudio(blob: Blob) {
   const startedAt = performance.now();
   debugLog('Transcription requested.', {
@@ -358,28 +529,41 @@ export async function transcribeAudio(blob: Blob) {
   });
 
   try {
-    const transcriber = await loadWhisperTranscriber();
-    const normalizedAudio = await normalizeAudioForWhisper(blob);
-    const generationOptions = {
-      chunk_length_s: 10,
-      stride_length_s: 2,
-      return_timestamps: false,
-      ...(WHISPER_IS_ENGLISH_ONLY
-        ? {}
-        : {
-            language: CAMPAIGN_ASR_LANGUAGE,
-            task: CAMPAIGN_ASR_TASK,
-          }),
-    };
-
-    debugLog('Invoking Whisper transcription with mono float32 PCM audio.');
-    const output = await transcriber(normalizedAudio, generationOptions);
-    const transcript = extractTranscriptionText(output);
-    debugLog(`Whisper transcription completed in ${Math.round(performance.now() - startedAt)}ms.`, {
-      transcript,
+    const primaryTranscript = await transcribeWithWhisper(blob, {
+      attemptLabel: 'primary',
+      chunkLengthS: 10,
+      strideLengthS: 2,
     });
 
-    return transcript;
+    if (primaryTranscript) {
+      debugLog(
+        `Whisper transcription completed in ${Math.round(performance.now() - startedAt)}ms.`,
+        {
+          transcript: primaryTranscript,
+          attemptLabel: 'primary',
+        },
+      );
+      return primaryTranscript;
+    }
+
+    debugLog('Primary Whisper transcription returned no transcript. Retrying with trimmed audio.');
+    const trimmedRetryTranscript = await transcribeWithWhisper(blob, {
+      attemptLabel: 'trimmed-retry',
+      trimSilence: true,
+    });
+
+    if (trimmedRetryTranscript) {
+      debugLog(
+        `Whisper transcription recovered on trimmed retry in ${Math.round(performance.now() - startedAt)}ms.`,
+        {
+          transcript: trimmedRetryTranscript,
+          attemptLabel: 'trimmed-retry',
+        },
+      );
+      return trimmedRetryTranscript;
+    }
+
+    throw new Error('Whisper returned an empty transcript.');
   } catch (error) {
     console.warn(`${DEBUG_PREFIX} Whisper transcription failed, attempting browser fallback.`, error);
     try {

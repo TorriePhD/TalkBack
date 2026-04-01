@@ -109,27 +109,15 @@ export async function tokenizeText(text: string) {
     return [];
   }
 
-  const { processor } = await loadASR();
-  const tokenizer = processor.tokenizer as
-    | (((value: string, options?: { add_special_tokens?: boolean; return_tensor?: boolean }) => {
-        input_ids: number[] | number[][];
-      }) & { pad_token_id?: number })
-    | undefined;
-
-  if (!tokenizer) {
-    return [];
-  }
+  const { tokenizer } = await loadASR();
 
   setCTCBlankTokenId(
     typeof tokenizer.pad_token_id === 'number' ? tokenizer.pad_token_id : 0,
   );
 
-  const encoded = tokenizer(normalizedText, {
+  const tokens = tokenizer.encode(normalizedText, {
     add_special_tokens: false,
-    return_tensor: false,
-  }).input_ids as number[] | number[][];
-
-  const tokens = Array.isArray(encoded[0]) ? (encoded[0] as number[]) : (encoded as number[]);
+  });
 
   return tokens.filter((token) => Number.isInteger(token));
 }

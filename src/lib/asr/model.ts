@@ -1,12 +1,14 @@
-import { AutoModelForCTC, AutoProcessor, env } from '@huggingface/transformers';
+import { AutoModelForCTC, AutoProcessor, AutoTokenizer, env } from '@huggingface/transformers';
 
 const MODEL_ID = 'Xenova/wav2vec2-base-960h';
 
 type ASRProcessor = Awaited<ReturnType<typeof AutoProcessor.from_pretrained>>;
 type ASRModel = Awaited<ReturnType<typeof AutoModelForCTC.from_pretrained>>;
+type ASRTokenizer = Awaited<ReturnType<typeof AutoTokenizer.from_pretrained>>;
 
 interface LoadedASR {
   processor: ASRProcessor;
+  tokenizer: ASRTokenizer;
   model: ASRModel;
 }
 
@@ -40,10 +42,13 @@ export async function loadASR(): Promise<LoadedASR> {
     loadPromise = (async () => {
       env.allowLocalModels = false;
 
-      const processor = await AutoProcessor.from_pretrained(MODEL_ID);
-      const model = await loadModel();
+      const [processor, tokenizer, model] = await Promise.all([
+        AutoProcessor.from_pretrained(MODEL_ID),
+        AutoTokenizer.from_pretrained(MODEL_ID),
+        loadModel(),
+      ]);
 
-      return { processor, model };
+      return { processor, tokenizer, model };
     })().catch((error) => {
       loadPromise = null;
       throw error;

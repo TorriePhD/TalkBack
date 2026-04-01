@@ -238,6 +238,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
   const [guideRecording, setGuideRecording] = useState<Blob | null>(null);
   const [attemptRecording, setAttemptRecording] = useState<Blob | null>(null);
   const [reversedAttemptRecording, setReversedAttemptRecording] = useState<Blob | null>(null);
+  const [originalDebugScore, setOriginalDebugScore] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [stars, setStars] = useState(0);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
@@ -259,6 +260,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     setGuideRecording(null);
     setAttemptRecording(null);
     setReversedAttemptRecording(null);
+    setOriginalDebugScore(null);
     setScore(0);
     setStars(0);
     setActiveAttemptCharge(null);
@@ -427,6 +429,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     setInfo(null);
     setAttemptRecording(null);
     setReversedAttemptRecording(null);
+    setOriginalDebugScore(null);
     setScore(0);
     setStars(0);
     attemptRecorder.clearRecording();
@@ -478,6 +481,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
         setStageChallengeId(challenge.id);
         setAttemptRecording(null);
         setReversedAttemptRecording(null);
+        setOriginalDebugScore(null);
         setScore(0);
         setStars(0);
         attemptRecorder.clearRecording();
@@ -553,10 +557,18 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
 
     try {
       const nextReversedAttempt = await reverseAudioBlob(attemptRecording);
-      const processedAttemptAudio = await preprocessAudioBlob(nextReversedAttempt);
-      const scoreResult = await scoreAudio(processedAttemptAudio, activeChallenge.phrase);
-      const nextScore = scoreResult.score;
-      const nextStars = scoreResult.stars;
+      const [processedAttemptAudio, processedOriginalAudio] = await Promise.all([
+        preprocessAudioBlob(nextReversedAttempt),
+        originalRecording ? preprocessAudioBlob(originalRecording) : Promise.resolve(new Float32Array(0)),
+      ]);
+      const [attemptScoreResult, originalScoreResult] = await Promise.all([
+        scoreAudio(processedAttemptAudio, activeChallenge.phrase),
+        originalRecording
+          ? scoreAudio(processedOriginalAudio, activeChallenge.phrase)
+          : Promise.resolve(null),
+      ]);
+      const nextScore = attemptScoreResult.score;
+      const nextStars = attemptScoreResult.stars;
       let didClearChallenge = false;
 
       if (nextStars === 3) {
@@ -570,6 +582,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
       }
 
       setReversedAttemptRecording(nextReversedAttempt);
+      setOriginalDebugScore(originalScoreResult?.score ?? null);
       setScore(nextScore);
       setStars(nextStars);
       setStage('result');
@@ -596,6 +609,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     attemptRecording,
     activeChallenge,
     activeAttemptCharge,
+    originalRecording,
     refreshCampaign,
   ]);
 
@@ -830,8 +844,12 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
                 <strong>{activeChallenge.phrase}</strong>
               </div>
               <div className="campaign-result-metric">
-                <span>Phrase Probability</span>
-                <strong>{Math.round(score * 100)}%</strong>
+                <span>Original Raw Score</span>
+                <strong>{originalDebugScore === null ? 'N/A' : originalDebugScore.toFixed(6)}</strong>
+              </div>
+              <div className="campaign-result-metric">
+                <span>Attempt Raw Score</span>
+                <strong>{score.toFixed(6)}</strong>
               </div>
             </div>
           </div>

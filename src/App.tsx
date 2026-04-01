@@ -31,6 +31,14 @@ import { CoinDisplay, ResourceProvider } from './features/resources/ResourceProv
 type View = 'home' | 'thread' | 'friends';
 type AppPath = '/' | '/campaign';
 
+function getNormalizedBasePath() {
+  const configuredBasePath = import.meta.env.BASE_URL ?? '/';
+  const trimmed = configuredBasePath.endsWith('/')
+    ? configuredBasePath.slice(0, -1)
+    : configuredBasePath;
+  return trimmed || '';
+}
+
 interface ThreadSummary {
   activeRound: Round | null;
   averageStars: number | null;
@@ -51,20 +59,33 @@ function getAppPath(): AppPath {
     return '/';
   }
 
-  return window.location.pathname === '/campaign' ? '/campaign' : '/';
+  const basePath = getNormalizedBasePath();
+  const pathname = window.location.pathname;
+  const appRelativePath = basePath && pathname.startsWith(basePath)
+    ? pathname.slice(basePath.length) || '/'
+    : pathname;
+
+  return appRelativePath === '/campaign' ? '/campaign' : '/';
 }
 
 function updateAppPath(path: AppPath, options?: { replace?: boolean }) {
-  if (typeof window === 'undefined' || window.location.pathname === path) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const basePath = getNormalizedBasePath();
+  const destination = `${basePath}${path === '/' ? '' : path}` || '/';
+
+  if (window.location.pathname === destination) {
     return;
   }
 
   if (options?.replace) {
-    window.history.replaceState(window.history.state, '', path);
+    window.history.replaceState(window.history.state, '', destination);
     return;
   }
 
-  window.history.pushState(window.history.state, '', path);
+  window.history.pushState(window.history.state, '', destination);
 }
 
 function sortNewestFirst(left: Round, right: Round) {

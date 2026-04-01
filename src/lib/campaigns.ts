@@ -3,7 +3,7 @@ import { clearWordPackUnlockCache } from './wordPacks';
 
 const MAX_CACHE_AGE_MS = 1000 * 60 * 10;
 const ACTIVE_CAMPAIGN_STATE_CACHE_PREFIX = 'active_campaign_state_cache:';
-const CAMPAIGN_RETRY_COST = 10;
+const CAMPAIGN_RETRY_COST = 5;
 
 export type CampaignChallengeDifficulty = 'easy' | 'medium' | 'hard';
 export type CampaignChallengeMode = 'normal' | 'reverse_only';

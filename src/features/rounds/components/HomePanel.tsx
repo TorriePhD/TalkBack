@@ -127,7 +127,7 @@ export function HomePanel({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [campaignTitle, setCampaignTitle] = useState('Monthly Campaign');
   const [campaignSubtitle, setCampaignSubtitle] = useState(
-    '3 stars opens the next egg. One free try per challenge each day.',
+    '3 stars opens the next egg. 2 free tries per challenge each day.',
   );
   const [campaignBannerImage, setCampaignBannerImage] = useState<string | null>(null);
   const [campaignProgressLabel, setCampaignProgressLabel] = useState<string | null>(null);
@@ -166,7 +166,7 @@ export function HomePanel({
         setCampaignTitle(
           formatCampaignEntryTitle(campaignState.campaign.theme, title || campaignState.campaign.name),
         );
-        setCampaignSubtitle('3 stars opens the next egg. One free try per challenge each day.');
+        setCampaignSubtitle('3 stars opens the next egg. 2 free tries per challenge each day.');
         setCampaignProgressLabel(
           `Challenge ${campaignState.progress.currentIndex} of ${campaignState.challenges.length}`,
         );
@@ -174,7 +174,7 @@ export function HomePanel({
         if (!cancelled) {
           setCampaignBannerImage(null);
           setCampaignTitle('Monthly Campaign');
-          setCampaignSubtitle('3 stars opens the next egg. One free try per challenge each day.');
+          setCampaignSubtitle('3 stars opens the next egg. 2 free tries per challenge each day.');
           setCampaignProgressLabel(null);
         }
       }

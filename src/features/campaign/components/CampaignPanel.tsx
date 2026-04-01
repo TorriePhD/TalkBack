@@ -48,6 +48,8 @@ const FLOATING_EGGS = [
 const CAMPAIGN_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   channelCount: 1,
 };
+const CAMPAIGN_FREE_TRIES_PER_DAY = 2;
+const DEFAULT_CAMPAIGN_RETRY_COST = 5;
 
 function LeaderboardIcon() {
   return (
@@ -84,14 +86,31 @@ function isToday(value: string | null | undefined) {
 }
 
 function getRetryCost(attemptState: unknown) {
-  const retryCost = Number((attemptState as { retryCost?: unknown } | null)?.retryCost ?? 10);
-  return Number.isFinite(retryCost) ? retryCost : 10;
+  const retryCost = Number(
+    (attemptState as { retryCost?: unknown } | null)?.retryCost ?? DEFAULT_CAMPAIGN_RETRY_COST,
+  );
+  return Number.isFinite(retryCost) ? retryCost : DEFAULT_CAMPAIGN_RETRY_COST;
 }
 
-function isPaidRetry(attemptState: unknown) {
-  const attemptsToday = Number((attemptState as { attemptsToday?: unknown } | null)?.attemptsToday ?? 0);
+function getAttemptsUsedToday(attemptState: unknown) {
+  const attemptsToday = Number(
+    (attemptState as { attemptsToday?: unknown } | null)?.attemptsToday ?? 0,
+  );
   const lastAttemptDate = (attemptState as { lastAttemptDate?: unknown } | null)?.lastAttemptDate;
-  return attemptsToday >= 1 && typeof lastAttemptDate === 'string' && isToday(lastAttemptDate);
+
+  if (!Number.isFinite(attemptsToday) || typeof lastAttemptDate !== 'string' || !isToday(lastAttemptDate)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor(attemptsToday));
+}
+
+function getFreeTriesRemaining(attemptState: unknown) {
+  return Math.max(0, CAMPAIGN_FREE_TRIES_PER_DAY - getAttemptsUsedToday(attemptState));
+}
+
+function requiresRetryCharge(attemptState: unknown) {
+  return getFreeTriesRemaining(attemptState) === 0;
 }
 
 function getChallengeState(index: number, currentIndex: number, completedCount: number) {
@@ -107,9 +126,18 @@ function getChallengeState(index: number, currentIndex: number, completedCount: 
 }
 
 function getAttemptSummary(attemptState: unknown) {
-  return isPaidRetry(attemptState)
-    ? `Free attempt used today. Next retry costs ${getRetryCost(attemptState)} BB Coins.`
-    : '1 free attempt per challenge each day. Extra retries cost 10 BB Coins.';
+  const freeTriesRemaining = getFreeTriesRemaining(attemptState);
+  const retryCost = getRetryCost(attemptState);
+
+  if (freeTriesRemaining === 0) {
+    return `Free tries used today. Next retry costs ${retryCost} BB Coins.`;
+  }
+
+  if (freeTriesRemaining === 1) {
+    return `1 free try left today. Extra retries cost ${retryCost} BB Coins.`;
+  }
+
+  return `2 free tries per challenge each day. Extra retries cost ${retryCost} BB Coins.`;
 }
 
 function formatThemeName(value: string | null | undefined) {
@@ -139,31 +167,6 @@ function formatCampaignTitle(state: CampaignState | null) {
   return campaignMatch?.[1]?.trim() || trimmedTitle || 'Monthly Campaign';
 }
 
-function formatCampaignDate(value: string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-
-  const parsedDate = new Date(value);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return null;
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-  }).format(parsedDate);
-}
-
-function buildCampaignSummary(state: CampaignState | null, challengeCount: number) {
-  if (!state) {
-    return 'Complete each challenge in order. You need 3 stars to unlock the next egg.';
-  }
-
-  return `${challengeCount} Easter challenges. Earn 3 stars to open the next egg. Each challenge gives you one free try per day.`;
-}
-
 function buildRoadWindow(challenges: CampaignChallenge[], currentIndex: number) {
   const currentChallenge =
     challenges.find((challenge) => challenge.challengeIndex === currentIndex) ?? null;
@@ -189,6 +192,30 @@ function getRoadNodeTop(index: number, total: number) {
   const end = 74;
   const step = (end - start) / (total - 1);
   return `${start + index * step}%`;
+}
+
+function RetryCostBadge({ cost }: { cost: number }) {
+  return (
+    <span aria-label={`${cost} BB Coins`} className="campaign-retry-cost-badge" role="img">
+      <img alt="" aria-hidden="true" src={`${import.meta.env.BASE_URL}bbcoin.png`} />
+      <strong>{cost}</strong>
+    </span>
+  );
+}
+
+function CampaignActionLabel({
+  label,
+  retryCost,
+}: {
+  label: string;
+  retryCost?: number | null;
+}) {
+  return (
+    <span className="campaign-action-button-content">
+      <span>{label}</span>
+      {typeof retryCost === 'number' ? <RetryCostBadge cost={retryCost} /> : null}
+    </span>
+  );
 }
 
 export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
@@ -220,6 +247,11 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(false);
   const [asrWarmError, setAsrWarmError] = useState<string | null>(null);
+  const [isStartingAttempt, setIsStartingAttempt] = useState(false);
+  const [activeAttemptCharge, setActiveAttemptCharge] = useState<{
+    charged: boolean;
+    cost: number;
+  } | null>(null);
 
   const resetFlow = useCallback(() => {
     setStage('overview');
@@ -231,6 +263,8 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     setTranscript('');
     setScore(0);
     setStars(0);
+    setActiveAttemptCharge(null);
+    setIsStartingAttempt(false);
     setError(null);
     setInfo(null);
     originalRecorder.clearRecording();
@@ -366,14 +400,19 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     ? getChallengeState(currentChallenge.challengeIndex, currentIndex, completedCount)
     : 'completed';
   const title = formatCampaignTitle(campaignState);
-  const subtitle = buildCampaignSummary(campaignState, challenges.length);
   const bannerImage = getAssetValue(campaignState, 'banner_image');
   const challengeIcon = getAssetValue(campaignState, 'challenge_icon');
-  const endDateLabel = formatCampaignDate(campaignState?.campaign.endDate);
   const roadChallenges = useMemo(
     () => buildRoadWindow(challenges, currentIndex),
     [challenges, currentIndex],
   );
+  const roadRetryCost =
+    currentChallenge && requiresRetryCharge(campaignState?.attemptState)
+      ? getRetryCost(campaignState?.attemptState)
+      : null;
+  const currentRetryCost = requiresRetryCharge(currentAttemptState)
+    ? getRetryCost(currentAttemptState)
+    : null;
 
   const startOriginalRecording = useCallback(async () => {
     await originalRecorder.prepareRecording();
@@ -397,6 +436,87 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     setStage('recording-attempt');
   }, [attemptRecorder]);
 
+  const startCampaignAttempt = useCallback(
+    async (
+      challenge: CampaignChallenge,
+      nextStage: Extract<CampaignStage, 'recording-original' | 'recording-attempt'>,
+    ) => {
+      setIsStartingAttempt(true);
+      setError(null);
+
+      try {
+        const attemptResult = await consumeCampaignAttempt(challenge.id);
+        const attemptWasCharged = Boolean(attemptResult.charged);
+        const retryCost = getRetryCost(attemptResult);
+
+        if (typeof attemptResult.currentBalance === 'number') {
+          setCoinBalance(attemptResult.currentBalance);
+        } else {
+          await refreshCoins();
+        }
+
+        setCampaignState((current) => {
+          if (!current) {
+            return current;
+          }
+
+          const nextAttempts = current.attempts.some(
+            (attempt) => attempt.challengeId === attemptResult.challengeId,
+          )
+            ? current.attempts.map((attempt) =>
+                attempt.challengeId === attemptResult.challengeId ? attemptResult : attempt,
+              )
+            : [...current.attempts, attemptResult];
+
+          return {
+            ...current,
+            attemptState:
+              challenge.challengeIndex === current.progress.currentIndex
+                ? attemptResult
+                : current.attemptState,
+            attempts: nextAttempts,
+          };
+        });
+
+        setStageChallengeId(challenge.id);
+        setAttemptRecording(null);
+        setReversedAttemptRecording(null);
+        setTranscript('');
+        setScore(0);
+        setStars(0);
+        attemptRecorder.clearRecording();
+
+        if (nextStage === 'recording-original') {
+          setOriginalRecording(null);
+          setGuideRecording(null);
+          originalRecorder.clearRecording();
+        }
+
+        setActiveAttemptCharge({
+          charged: attemptWasCharged,
+          cost: retryCost,
+        });
+        setInfo(attemptWasCharged ? `Retry charged: -${retryCost} BB Coins.` : null);
+        setStage(nextStage);
+      } catch (caughtError) {
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : 'Unable to start this campaign attempt.',
+        );
+
+        try {
+          await refreshCampaign();
+        } catch {
+          // Keep the original start error visible if the refresh also fails.
+        }
+      } finally {
+        setIsStartingAttempt(false);
+      }
+    },
+    [attemptRecorder, originalRecorder, refreshCampaign, refreshCoins, setCoinBalance],
+  );
+
   const openChallengeBriefing = useCallback(() => {
     if (!currentChallenge) {
       return;
@@ -408,108 +528,66 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     setStage('briefing');
   }, [currentChallenge]);
 
+  const startChallengeFromBriefing = useCallback(() => {
+    if (!activeChallenge || isStartingAttempt) {
+      return;
+    }
+
+    void startCampaignAttempt(
+      activeChallenge,
+      activeChallenge.mode === 'reverse_only' ? 'recording-attempt' : 'recording-original',
+    );
+  }, [activeChallenge, isStartingAttempt, startCampaignAttempt]);
+
+  const startRetryAttempt = useCallback(() => {
+    if (!activeChallenge || isStartingAttempt) {
+      return;
+    }
+
+    void startCampaignAttempt(activeChallenge, 'recording-attempt');
+  }, [activeChallenge, isStartingAttempt, startCampaignAttempt]);
+
   const handleProcessAttempt = useCallback(async () => {
     if (!activeChallenge || !attemptRecording) {
       return;
     }
 
-    const latestState = (await loadActiveCampaignState(currentUserId)) as CampaignState | null;
-
-    if (latestState) {
-      setCampaignState(latestState);
-    }
-
-    const latestCurrentChallenge =
-      latestState?.challenges.find(
-        (challenge) => challenge.challengeIndex === latestState.progress.currentIndex,
-      ) ?? null;
-    const latestAttemptState =
-      latestCurrentChallenge ? latestState?.attemptState ?? null : currentAttemptState;
-
-    if (!latestCurrentChallenge || latestCurrentChallenge.id !== activeChallenge.id) {
-      resetFlow();
-      setError('This challenge is no longer current. Return to the road and start the current egg.');
-      return;
-    }
-
-    const costsCoins = isPaidRetry(latestAttemptState);
-    const retryCost = getRetryCost(latestAttemptState);
-
-    if (costsCoins && typeof window !== 'undefined') {
-      const confirmed = window.confirm(`This retry costs ${retryCost} BB Coins. Continue?`);
-
-      if (!confirmed) {
-        return;
-      }
-    }
-
     setStage('processing');
     setError(null);
-    setInfo(null);
 
     try {
       const nextReversedAttempt = await reverseAudioBlob(attemptRecording);
       const nextTranscript = await transcribeAudio(nextReversedAttempt);
       const nextScore = calculateGuessSimilarity(nextTranscript, activeChallenge.phrase);
       const nextStars = getCampaignStars(nextScore);
-      const consumeResult = await consumeCampaignAttempt(latestCurrentChallenge.id);
-      const currentBalance = (consumeResult as { currentBalance?: unknown } | null)?.currentBalance;
-
-      if (typeof currentBalance === 'number') {
-        setCoinBalance(currentBalance);
-      } else {
-        await refreshCoins();
-      }
-
-      const nextAttemptState =
-        ((consumeResult as { attemptState?: unknown } | null)?.attemptState ??
-          consumeResult) as CampaignState['attemptState'];
       let didClearChallenge = false;
-      let nextProgress: CampaignState['progress'] | null = null;
-      let nextUnlockedPackIds: CampaignState['unlockedPackIds'] | null = null;
 
       if (nextStars === 3) {
         const completionResult = await completeCampaignChallenge({
-          challengeId: latestCurrentChallenge.id,
+          challengeId: activeChallenge.id,
           stars: nextStars,
           transcript: nextTranscript,
           score: nextScore,
         });
 
         didClearChallenge = completionResult.advanced;
-        nextProgress = completionResult.progress;
-        nextUnlockedPackIds = completionResult.unlockedPackIds;
       }
 
-      setCampaignState((current) =>
-        current
-          ? {
-              ...current,
-              progress: didClearChallenge && nextProgress ? nextProgress : current.progress,
-              attemptState: nextAttemptState,
-              unlockedPackIds: didClearChallenge
-                ? nextUnlockedPackIds ?? current.unlockedPackIds
-                : current.unlockedPackIds,
-            }
-          : current,
-      );
       setReversedAttemptRecording(nextReversedAttempt);
       setTranscript(nextTranscript);
       setScore(nextScore);
       setStars(nextStars);
       setStage('result');
 
-      const retryWasCharged = Boolean((consumeResult as { charged?: unknown } | null)?.charged);
-
       if (didClearChallenge) {
         await refreshCampaign();
         setInfo(
-          retryWasCharged
-            ? `Retry charged: -${retryCost} BB Coins. Challenge cleared. The next egg is ready on the road.`
+          activeAttemptCharge?.charged
+            ? `Retry charged: -${activeAttemptCharge.cost} BB Coins. Challenge cleared. The next egg is ready on the road.`
             : 'Challenge cleared. The next egg is ready on the road.',
         );
-      } else if (retryWasCharged) {
-        setInfo(`Retry charged: -${retryCost} BB Coins.`);
+      } else if (activeAttemptCharge?.charged) {
+        setInfo(`Retry charged: -${activeAttemptCharge.cost} BB Coins.`);
       }
     } catch (caughtError) {
       setError(
@@ -522,12 +600,8 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
   }, [
     attemptRecording,
     activeChallenge,
-    currentAttemptState,
-    currentUserId,
+    activeAttemptCharge,
     refreshCampaign,
-    refreshCoins,
-    resetFlow,
-    setCoinBalance,
   ]);
 
   useEffect(() => {
@@ -614,18 +688,15 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
             </button>
             <button
               className="button primary"
-              onClick={() => {
-                setError(null);
-                setInfo(null);
-                setStage(
-                  activeChallenge.mode === 'reverse_only'
-                    ? 'recording-attempt'
-                    : 'recording-original',
-                );
-              }}
+              disabled={isStartingAttempt}
+              onClick={startChallengeFromBriefing}
               type="button"
             >
-              {activeChallenge.mode === 'reverse_only' ? 'Start Reverse Attempt' : 'Start Challenge'}
+              {isStartingAttempt ? (
+                'Starting...'
+              ) : (
+                <CampaignActionLabel label="Play" retryCost={currentRetryCost} />
+              )}
             </button>
           </div>
         </div>
@@ -790,8 +861,17 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
               Back To Road
             </button>
             {stars < 3 ? (
-              <button className="button primary" onClick={openAttemptStep} type="button">
-                Try Again
+              <button
+                className="button primary"
+                disabled={isStartingAttempt}
+                onClick={startRetryAttempt}
+                type="button"
+              >
+                {isStartingAttempt ? (
+                  'Starting...'
+                ) : (
+                  <CampaignActionLabel label="Try Again" retryCost={currentRetryCost} />
+                )}
               </button>
             ) : null}
           </div>
@@ -802,7 +882,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     return (
       <div className="campaign-step-stack">
         <div className="empty-state compact-empty">
-          Press start from the road to begin the next challenge.
+          Press Play from the road to begin the next challenge.
         </div>
       </div>
     );
@@ -857,46 +937,17 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
               <div className="empty-state compact-empty">No active campaign is available.</div>
             ) : (
               <>
-                <div className="campaign-hero-card">
-                  <div className="campaign-hero-copy">
-                    <div className="campaign-hero-topline">
-                      <span className="badge primary">
-                        {formatThemeName(campaignState.campaign.theme) || 'Campaign'}
-                      </span>
-                      <span>{endDateLabel ? `Ends ${endDateLabel}` : `${challenges.length} challenges`}</span>
-                    </div>
-                    <h2>{title}</h2>
-                    <p>{subtitle}</p>
-                    <div className="campaign-hero-stats">
-                      <div className="campaign-hero-stat">
-                        <span>Road Progress</span>
-                        <strong>
-                          {Math.min(currentIndex, challenges.length || currentIndex)} / {challenges.length || 0}
-                        </strong>
-                      </div>
-                      <div className="campaign-hero-stat">
-                        <span>Cleared</span>
-                        <strong>{completedCount}</strong>
-                      </div>
-                      <div className="campaign-hero-stat">
-                        <span>Advance Rule</span>
-                        <strong>3 stars</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="campaign-hero-art">
-                    {bannerImage ? (
-                      <div
-                        aria-hidden="true"
-                        className="campaign-hero-art-image"
-                        style={{ backgroundImage: `url("${bannerImage}")` }}
-                      />
-                    ) : null}
-                    <div className="campaign-hero-emblem">
-                      {challengeIcon ? <img alt="" aria-hidden="true" src={challengeIcon} /> : null}
-                    </div>
-                  </div>
+                <div className="campaign-banner-card">
+                  {bannerImage ? (
+                    <img
+                      alt=""
+                      aria-hidden="true"
+                      className="campaign-banner-image"
+                      src={bannerImage}
+                    />
+                  ) : (
+                    <div aria-hidden="true" className="campaign-banner-fallback" />
+                  )}
                 </div>
 
                 <div className="campaign-road-stage">
@@ -953,11 +1004,15 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
                 <div className="campaign-road-cta">
                   <button
                     className="campaign-start-button"
-                    disabled={!currentChallenge}
+                    disabled={!currentChallenge || isStartingAttempt}
                     onClick={openChallengeBriefing}
                     type="button"
                   >
-                    {currentChallenge ? `Start Challenge ${currentIndex}` : 'Campaign Complete'}
+                    {currentChallenge ? (
+                      <CampaignActionLabel label="Play" retryCost={roadRetryCost} />
+                    ) : (
+                      'Campaign Complete'
+                    )}
                   </button>
                   <button
                     className="campaign-refresh-link"

@@ -11,10 +11,10 @@ import {
   listCampaignLeaderboard,
   loadActiveCampaignState,
 } from '../../../lib/campaigns';
+import { preprocessAudioBlob } from '../../../lib/asr/preprocess';
+import { scoreAudio, warmASRScorer } from '../../../lib/asr/scoring';
 import { useCoins } from '../../resources/ResourceProvider';
-import { calculateGuessSimilarity } from '../../rounds/utils';
-import { buildBackwardPhraseExample, formatDifficultyLabel, getCampaignStars } from '../scoring';
-import { transcribeAudio, warmCampaignTranscriber } from '../transcription';
+import { buildBackwardPhraseExample, formatDifficultyLabel } from '../scoring';
 
 interface CampaignPanelProps {
   currentUserId: string;
@@ -238,7 +238,6 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
   const [guideRecording, setGuideRecording] = useState<Blob | null>(null);
   const [attemptRecording, setAttemptRecording] = useState<Blob | null>(null);
   const [reversedAttemptRecording, setReversedAttemptRecording] = useState<Blob | null>(null);
-  const [transcript, setTranscript] = useState('');
   const [score, setScore] = useState(0);
   const [stars, setStars] = useState(0);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
@@ -260,7 +259,6 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     setGuideRecording(null);
     setAttemptRecording(null);
     setReversedAttemptRecording(null);
-    setTranscript('');
     setScore(0);
     setStars(0);
     setActiveAttemptCharge(null);
@@ -298,13 +296,13 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
 
     const warmAsr = async () => {
       try {
-        await warmCampaignTranscriber();
+        await warmASRScorer();
       } catch (caughtError) {
         if (!cancelled) {
           setAsrWarmError(
             caughtError instanceof Error
               ? caughtError.message
-              : 'Unable to warm the speech model.',
+              : 'Unable to warm the browser speech scorer.',
           );
         }
       }
@@ -429,7 +427,6 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
     setInfo(null);
     setAttemptRecording(null);
     setReversedAttemptRecording(null);
-    setTranscript('');
     setScore(0);
     setStars(0);
     attemptRecorder.clearRecording();
@@ -481,7 +478,6 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
         setStageChallengeId(challenge.id);
         setAttemptRecording(null);
         setReversedAttemptRecording(null);
-        setTranscript('');
         setScore(0);
         setStars(0);
         attemptRecorder.clearRecording();
@@ -557,16 +553,16 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
 
     try {
       const nextReversedAttempt = await reverseAudioBlob(attemptRecording);
-      const nextTranscript = await transcribeAudio(nextReversedAttempt);
-      const nextScore = calculateGuessSimilarity(nextTranscript, activeChallenge.phrase);
-      const nextStars = getCampaignStars(nextScore);
+      const processedAttemptAudio = await preprocessAudioBlob(nextReversedAttempt);
+      const scoreResult = await scoreAudio(processedAttemptAudio, activeChallenge.phrase);
+      const nextScore = scoreResult.score;
+      const nextStars = scoreResult.stars;
       let didClearChallenge = false;
 
       if (nextStars === 3) {
         const completionResult = await completeCampaignChallenge({
           challengeId: activeChallenge.id,
           stars: nextStars,
-          transcript: nextTranscript,
           score: nextScore,
         });
 
@@ -574,7 +570,6 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
       }
 
       setReversedAttemptRecording(nextReversedAttempt);
-      setTranscript(nextTranscript);
       setScore(nextScore);
       setStars(nextStars);
       setStage('result');
@@ -805,7 +800,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
           <WaveformLoader className="round-loader-callout-spinner" size={92} strokeWidth={3.6} />
           <div>
             <strong>Scoring challenge...</strong>
-            <p>Reversing audio, transcribing speech, and checking whether you earned 3 stars.</p>
+            <p>Reversing audio, running the browser speech model, and computing phrase probability.</p>
           </div>
         </div>
       );
@@ -835,11 +830,7 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
                 <strong>{activeChallenge.phrase}</strong>
               </div>
               <div className="campaign-result-metric">
-                <span>ASR Transcript</span>
-                <strong>{transcript || 'No transcript returned'}</strong>
-              </div>
-              <div className="campaign-result-metric">
-                <span>Similarity</span>
+                <span>Phrase Probability</span>
                 <strong>{Math.round(score * 100)}%</strong>
               </div>
             </div>
@@ -852,8 +843,8 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
             />
             <AudioPlayerCard
               blob={reversedAttemptRecording}
-              description="This reversed clip was sent to speech recognition."
-              title="ASR Input Audio"
+              description="This reversed clip was converted back to forward speech and scored in the browser."
+              title="Scoring Audio"
             />
           </div>
           <div className="button-row">

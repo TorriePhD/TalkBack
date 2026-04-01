@@ -473,7 +473,6 @@ export async function consumeCampaignAttempt(
 export async function completeCampaignChallenge(input: {
   challengeId: string;
   stars: number;
-  transcript: string;
   score: number;
 }): Promise<CampaignCompletionResult> {
   const normalizedChallengeId = input.challengeId.trim();
@@ -486,7 +485,7 @@ export async function completeCampaignChallenge(input: {
   const { data, error } = await client.rpc('complete_campaign_challenge', {
     complete_challenge_id: normalizedChallengeId,
     stars_input: input.stars,
-    transcript_input: input.transcript,
+    transcript_input: '',
     score_input: input.score,
   });
 

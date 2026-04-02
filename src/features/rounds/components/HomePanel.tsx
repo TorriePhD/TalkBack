@@ -50,7 +50,7 @@ function InfoIcon() {
   return (
     <svg
       aria-hidden="true"
-      className="game-action-icon"
+      className="game-action-icon game-action-icon--info"
       fill="none"
       viewBox="0 0 12 12"
     >

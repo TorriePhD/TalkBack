@@ -1113,9 +1113,9 @@ p {
 }
 
 .game-action-button--your-turn {
-  background: linear-gradient(135deg, #3b5bff, #5765ff 55%, #7a00ff);
+  background: #3b5bff;
   color: #f7f9ff;
-  box-shadow: 0 16px 30px rgba(59, 91, 255, 0.32);
+  box-shadow: 0 16px 30px rgba(59, 91, 255, 0.36);
 }
 
 .game-action-button--their-turn {
@@ -1127,6 +1127,11 @@ p {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
+}
+
+.game-action-icon--info {
+  width: 17px;
+  height: 17px;
 }
 
 .home-create-picker {

@@ -97,6 +97,8 @@ Production build passes:
 npm run build
 ```
 
+The build now runs `scripts/update-sw-version.js` first to stamp `public/sw.js` with a cache version. It resolves in this order: `SW_VERSION` env var, `git rev-parse --short HEAD`, then a `build-<timestamp>` fallback.
+
 ## PWA And GitHub Pages
 
 - The app ships with a web manifest, service worker registration, and install prompt support for Android browsers that fire `beforeinstallprompt`.
@@ -106,6 +108,7 @@ npm run build
 - Set `VITE_PUSH_VAPID_PUBLIC_KEY` in `.env.local` to the public VAPID key generated for the push backend.
 - For GitHub Pages builds, also add `VITE_PUSH_VAPID_PUBLIC_KEY` as a repository Actions variable in `Settings > Secrets and variables > Actions > Variables`, then redeploy. This is a public key, so it belongs in Variables, not Secrets.
 - For GitHub Pages, set `BASE_PATH` or `VITE_BASE_PATH` to your repository path such as `/TalkBack/` when you need a manual override. The Vite config also auto-detects the repository name during GitHub Actions builds.
+- Optionally set `SW_VERSION` in CI if you want to override the service-worker cache version; otherwise it defaults to the short git commit hash.
 - The manifest uses relative URLs so the install entry point works both at `/` and at a GitHub Pages repository subpath.
 
 ## HTTPS For Cross-Device Recording

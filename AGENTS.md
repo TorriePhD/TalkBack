@@ -55,6 +55,8 @@ Do not commit secrets from `.env.local`. If env requirements change, update `.en
 - Preserve the current mobile-first recording flow and secure-context assumptions for microphone access.
 - Keep private-audio behavior intact; changes to bucket paths, signed URL generation, or storage policies are high risk.
 - If you change env requirements, docs, or setup steps, update `README.md` and `.env.example` in the same pass.
+- Service-worker cache busting is deploy/version based (not per-file manifest hashing): `scripts/update-sw-version.js` stamps `BUILD_VERSION` in `public/sw.js` using `SW_VERSION` override, then short git hash, then a timestamp fallback.
+- `public/sw.js` versioned cache buckets should remain aligned with `BUILD_VERSION` (for example `precache-core-*`, `precache-card-*`, `runtime-*`) so activate can clean up older versions safely.
 
 ## Validation
 

@@ -21,7 +21,6 @@ import { buildBackwardPhraseExample, formatDifficultyLabel } from '../scoring';
 
 interface CampaignPanelProps {
   currentUserId: string;
-  onBack: () => void;
 }
 
 type CampaignStage =
@@ -205,11 +204,11 @@ function buildRoadWindow(challenges: CampaignChallenge[], currentIndex: number) 
 
 function getRoadNodeTop(index: number, total: number) {
   if (total <= 1) {
-    return '74%';
+    return '78%';
   }
 
-  const start = 16;
-  const end = 74;
+  const start = 10;
+  const end = 78;
   const step = (end - start) / (total - 1);
   return `${start + index * step}%`;
 }
@@ -238,7 +237,7 @@ function CampaignActionLabel({
   );
 }
 
-export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
+export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
   const originalRecorder = useAudioRecorder({
     audioConstraints: CAMPAIGN_AUDIO_CONSTRAINTS,
     preparedStreamIdleMs: 0,
@@ -1128,12 +1127,6 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
 
         {stage === 'overview' ? (
           <div className="campaign-road-page">
-            <div className="campaign-topbar">
-              <button className="button ghost round-screen-back" onClick={onBack} type="button">
-                Back
-              </button>
-            </div>
-
             {info ? <div className="success-banner">{info}</div> : null}
 
             {isLoadingCampaign ? (
@@ -1162,34 +1155,33 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
                 </div>
 
                 <div className="campaign-road-stage">
-                  <button
-                    aria-label="Open leaderboard"
-                    className="campaign-side-action"
-                    onClick={() => setLeaderboardOpen(true)}
-                    type="button"
-                  >
-                    <LeaderboardIcon />
-                    <span>Ranks</span>
-                  </button>
+                  <div className="campaign-road-stage-inner">
+                    <button
+                      aria-label="Open leaderboard"
+                      className="campaign-side-action"
+                      onClick={() => setLeaderboardOpen(true)}
+                      type="button"
+                    >
+                      <LeaderboardIcon />
+                      <span>Ranks</span>
+                    </button>
 
-                  <div className="campaign-road-viewer">
-                    <div className="campaign-road-line" />
+                    <div className="campaign-road-viewer">
+                      <div className="campaign-road-line" />
 
-                    {roadChallenges.map((challenge, index) => {
-                      const state = getChallengeState(
-                        challenge.challengeIndex,
-                        currentIndex,
-                        completedCount,
-                      );
-                      const isCurrent = challenge.challengeIndex === currentIndex;
+                      {roadChallenges.map((challenge, index) => {
+                        const state = getChallengeState(
+                          challenge.challengeIndex,
+                          currentIndex,
+                          completedCount,
+                        );
 
-                      return (
-                        <div
-                          className={`campaign-road-node campaign-road-node-${state}${isCurrent ? ' is-active' : ''}`}
-                          key={challenge.id}
-                          style={{ top: getRoadNodeTop(index, roadChallenges.length) }}
-                        >
-                          <div className="campaign-road-node-shell">
+                        return (
+                          <div
+                            className={`campaign-road-node campaign-road-node-${state}`}
+                            key={challenge.id}
+                            style={{ top: getRoadNodeTop(index, roadChallenges.length) }}
+                          >
                             <span className="campaign-road-node-icon">
                               {challengeIcon ? (
                                 <img alt="" aria-hidden="true" src={challengeIcon} />
@@ -1197,20 +1189,19 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
                               <strong>{challenge.challengeIndex}</strong>
                             </span>
                           </div>
-
-                          {isCurrent ? (
-                            <div className="campaign-road-node-caption">
-                              <span>{formatDifficultyLabel(challenge.difficulty)}</span>
-                              <strong>
-                                {challenge.mode === 'reverse_only' ? 'Reverse Only' : 'Normal'}
-                              </strong>
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
+                {currentChallenge ? (
+                  <div className="campaign-current-difficulty">
+                    <span>{formatDifficultyLabel(currentChallenge.difficulty)}</span>
+                    <strong>
+                      {currentChallenge.mode === 'reverse_only' ? 'Reverse Only' : 'Normal'}
+                    </strong>
+                  </div>
+                ) : null}
 
                 <div className="campaign-road-cta">
                   <button
@@ -1224,13 +1215,6 @@ export function CampaignPanel({ currentUserId, onBack }: CampaignPanelProps) {
                     ) : (
                       'Campaign Complete'
                     )}
-                  </button>
-                  <button
-                    className="campaign-refresh-link"
-                    onClick={() => void refreshCampaign()}
-                    type="button"
-                  >
-                    Refresh Road
                   </button>
                 </div>
               </>

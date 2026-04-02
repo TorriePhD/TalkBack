@@ -25,24 +25,6 @@ interface HomePanelProps {
   onRefresh?: () => Promise<void>;
 }
 
-function formatCampaignEntryTitle(theme: string | null | undefined, rawTitle: string | null | undefined) {
-  const normalizedTheme = theme
-    ?.trim()
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
-  if (normalizedTheme) {
-    return `${normalizedTheme} Campaign`;
-  }
-
-  const trimmedTitle = rawTitle?.trim() ?? '';
-  const campaignMatch = trimmedTitle.match(/^(.*?\bcampaign)\b/i);
-
-  return campaignMatch?.[1]?.trim() || trimmedTitle || 'Monthly Campaign';
-}
-
 function formatAverageScore(averageStars: number | null) {
   if (averageStars === null) {
     return 'No score yet';
@@ -125,12 +107,7 @@ export function HomePanel({
   const [isChoosingFriend, setIsChoosingFriend] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [campaignTitle, setCampaignTitle] = useState('Monthly Campaign');
-  const [campaignSubtitle, setCampaignSubtitle] = useState(
-    '3 stars opens the next egg. 2 free tries per challenge each day.',
-  );
   const [campaignBannerImage, setCampaignBannerImage] = useState<string | null>(null);
-  const [campaignProgressLabel, setCampaignProgressLabel] = useState<string | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const isPullingRef = useRef(false);
   const sortedCreateGameOptions = useMemo(
@@ -157,25 +134,10 @@ export function HomePanel({
           Array.isArray(assets)
             ? assets.find((entry) => entry.key === 'banner_image')?.value ?? null
             : assets.banner_image ?? null;
-        const title =
-          Array.isArray(assets)
-            ? assets.find((entry) => entry.key === 'title')?.value ?? null
-            : assets.title ?? null;
-
         setCampaignBannerImage(bannerImage);
-        setCampaignTitle(
-          formatCampaignEntryTitle(campaignState.campaign.theme, title || campaignState.campaign.name),
-        );
-        setCampaignSubtitle('3 stars opens the next egg. 2 free tries per challenge each day.');
-        setCampaignProgressLabel(
-          `Challenge ${campaignState.progress.currentIndex} of ${campaignState.challenges.length}`,
-        );
       } catch {
         if (!cancelled) {
           setCampaignBannerImage(null);
-          setCampaignTitle('Monthly Campaign');
-          setCampaignSubtitle('3 stars opens the next egg. 2 free tries per challenge each day.');
-          setCampaignProgressLabel(null);
         }
       }
     };
@@ -315,14 +277,6 @@ export function HomePanel({
               style={{ backgroundImage: `url("${campaignBannerImage}")` }}
             />
           ) : null}
-          <div className="campaign-home-banner-copy">
-            <div className="campaign-home-banner-topline">
-              <span className="badge primary">Campaign</span>
-              {campaignProgressLabel ? <span>{campaignProgressLabel}</span> : null}
-            </div>
-            <strong>{campaignTitle}</strong>
-            <p>{campaignSubtitle}</p>
-          </div>
         </button>
 
         <div className="home-games-section">

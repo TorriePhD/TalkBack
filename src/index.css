@@ -916,19 +916,15 @@ p {
 }
 
 .campaign-home-banner {
-  display: grid;
-  gap: 14px;
+  display: block;
   width: 100%;
   margin-bottom: 18px;
-  padding: 16px;
-  border: 1px solid rgba(19, 33, 44, 0.08);
-  border-radius: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   text-align: left;
-  background:
-    linear-gradient(135deg, rgba(255, 252, 246, 0.98), rgba(250, 241, 248, 0.9)),
-    radial-gradient(circle at top right, rgba(255, 182, 77, 0.2), transparent 34%),
-    radial-gradient(circle at bottom left, rgba(77, 121, 255, 0.12), transparent 40%);
-  box-shadow: 0 18px 40px rgba(14, 24, 38, 0.1);
+  background: transparent;
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -936,38 +932,11 @@ p {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: 20px;
-  border: 1px solid rgba(19, 33, 44, 0.06);
+  border-radius: 0;
+  border: 0;
   background-position: right center;
   background-repeat: no-repeat;
   background-size: cover;
-}
-
-.campaign-home-banner-copy {
-  display: grid;
-  gap: 8px;
-}
-
-.campaign-home-banner-topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.campaign-home-banner-copy strong {
-  font-size: clamp(1.3rem, 4vw, 1.8rem);
-  line-height: 1.05;
-}
-
-.campaign-home-banner-copy p {
-  margin: 0;
-  color: var(--muted);
 }
 
 .home-empty {

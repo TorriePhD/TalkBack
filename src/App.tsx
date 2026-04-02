@@ -785,7 +785,7 @@ function App() {
 
             <div className="stack">
               {appPath === '/campaign' ? (
-                <CampaignPanel currentUserId={currentUserId} onBack={handleOpenHome} />
+                <CampaignPanel currentUserId={currentUserId} />
               ) : null}
               {appPath === '/' && view === 'home' ? (
                 <HomePanel

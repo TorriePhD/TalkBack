@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --strictPort",
-    "build": "tsc -b && vite build",
+    "update:sw-version": "node scripts/update-sw-version.js",
+    "build": "npm run update:sw-version && tsc -b && vite build",
     "generate:pack": "tsx scripts/generatePack.ts",
     "generate:campaign": "tsx scripts/generateCampaign.ts",
     "seed:easter-campaign": "tsx scripts/seedEasterCampaign.ts",

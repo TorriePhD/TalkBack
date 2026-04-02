@@ -1159,17 +1159,17 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
 
                 <div className="campaign-road-stage">
                   <div className="campaign-road-stage-inner">
-                    <button
-                      aria-label="Open leaderboard"
-                      className="campaign-side-action"
-                      onClick={() => setLeaderboardOpen(true)}
-                      type="button"
-                    >
-                      <LeaderboardIcon />
-                      <span>Ranks</span>
-                    </button>
-
                     <div className="campaign-road-viewer">
+                      <button
+                        aria-label="Open leaderboard"
+                        className="campaign-side-action"
+                        onClick={() => setLeaderboardOpen(true)}
+                        type="button"
+                      >
+                        <LeaderboardIcon />
+                        <span>Ranks</span>
+                      </button>
+
                       <div className="campaign-road-line" />
 
                       {roadChallenges.map((challenge, index) => {

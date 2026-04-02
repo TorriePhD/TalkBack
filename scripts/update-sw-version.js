@@ -12,7 +12,8 @@ function resolveBuildVersion() {
   }
 
   try {
-    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+    const gitHash = execSync('git rev-parse --short=12 HEAD', { encoding: 'utf8' }).trim();
+    return `git-${gitHash}`;
   } catch {
     return `build-${Date.now()}`;
   }

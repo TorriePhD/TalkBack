@@ -626,7 +626,10 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
       return;
     }
 
-    void startCampaignAttempt(activeChallenge, 'recording-attempt');
+    void startCampaignAttempt(
+      activeChallenge,
+      activeChallenge.mode === 'reverse_only' ? 'recording-attempt' : 'recording-original',
+    );
   }, [activeChallenge, coins, currentAttemptState, isStartingAttempt, startCampaignAttempt]);
 
   const handleProcessAttempt = useCallback(async () => {

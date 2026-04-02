@@ -916,6 +916,7 @@ p {
 }
 
 .campaign-home-banner {
+  position: relative;
   display: block;
   width: 100%;
   margin-bottom: 18px;
@@ -937,6 +938,29 @@ p {
   background-position: right center;
   background-repeat: no-repeat;
   background-size: cover;
+}
+
+.campaign-home-banner-play-button {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  width: 50px;
+  height: 50px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: rgba(14, 16, 24, 0.7);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.campaign-home-banner-play-button .game-action-icon {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .home-empty {

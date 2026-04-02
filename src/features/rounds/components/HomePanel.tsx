@@ -277,6 +277,9 @@ export function HomePanel({
               style={{ backgroundImage: `url("${campaignBannerImage}")` }}
             />
           ) : null}
+          <span aria-hidden="true" className="campaign-home-banner-play-button">
+            <PlayIcon />
+          </span>
         </button>
 
         <div className="home-games-section">

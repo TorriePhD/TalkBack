@@ -147,8 +147,7 @@ Deno.serve(async (request) => {
       return jsonResponse({
         sent: false,
         reason: 'invalid_subscription_endpoint',
-        error:
-          'The recipient browser returned an invalid push subscription endpoint. Microsoft Edge on Android is currently affected by this Web Push issue.',
+        error: 'The recipient browser returned an invalid push subscription endpoint.',
       });
     }
     console.info('send-push-notification: loaded subscription.', {

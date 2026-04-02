@@ -325,9 +325,7 @@ async function subscribeUserToPush(userId: string, registration: ServiceWorkerRe
       // Ignore unsubscribe failures and surface the root cause instead.
     }
 
-    throw new Error(
-      'This browser returned an invalid push subscription endpoint. Microsoft Edge on Android is currently affected by this Web Push issue. Use Chrome on Android or another browser for push notifications.',
-    );
+    throw new Error('This browser returned an invalid push subscription endpoint.');
   }
 
   await savePushSubscription(userId, subscription);

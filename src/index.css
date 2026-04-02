@@ -945,22 +945,26 @@ p {
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
-  width: 50px;
-  height: 50px;
-  border-radius: 999px;
+  min-height: 46px;
+  padding: 10px 18px;
+  border-radius: 16px;
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   justify-content: center;
-  color: #ffffff;
-  background: rgba(14, 16, 24, 0.7);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(2px);
+  color: #fffdfb;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong) 68%, #ffd24e);
+  box-shadow: 0 16px 30px rgba(255, 99, 84, 0.24);
   pointer-events: none;
 }
 
 .campaign-home-banner-play-button .game-action-icon {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1rem;
+  height: 1rem;
 }
 
 .home-empty {

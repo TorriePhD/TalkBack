@@ -97,7 +97,7 @@ Production build passes:
 npm run build
 ```
 
-The build now runs `scripts/update-sw-version.js` first to stamp `public/sw.js` with a cache version. It resolves in this order: `SW_VERSION` env var, `git rev-parse --short HEAD`, then a `build-<timestamp>` fallback.
+The build now runs `scripts/update-sw-version.js` first to stamp `public/sw.js` with a cache version. It resolves in this order: `SW_VERSION` env var, `git-<12-char hash>` from `git rev-parse --short=12 HEAD`, then a `build-<timestamp>` fallback.
 
 ## PWA And GitHub Pages
 

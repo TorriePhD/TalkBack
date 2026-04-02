@@ -319,14 +319,17 @@ export function HomePanel({
 
                   <div className="game-actions">
                     <button
-                      className="button primary game-action-button"
+                      aria-label={friend.isYourTurn ? 'Take Turn' : 'Their Turn'}
+                      className={`button primary game-action-button ${
+                        friend.isYourTurn ? 'game-action-button--your-turn' : 'game-action-button--their-turn'
+                      }`}
                       onClick={() => {
                         onOpenFriend?.(friend.id);
                       }}
                       type="button"
                     >
                       {friend.isYourTurn ? <PlayIcon /> : <InfoIcon />}
-                      <span>{friend.isYourTurn ? 'Take Turn' : 'Their Turn'}</span>
+                      {friend.isYourTurn ? <span>Take Turn</span> : null}
                     </button>
                   </div>
                 </div>

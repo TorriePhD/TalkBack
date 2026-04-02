@@ -319,7 +319,9 @@ export function HomePanel({
 
                   <div className="game-actions">
                     <button
-                      className="button primary game-action-button"
+                      className={`button primary game-action-button ${
+                        friend.isYourTurn ? 'game-action-button-take-turn' : ''
+                      }`}
                       onClick={() => {
                         onOpenFriend?.(friend.id);
                       }}

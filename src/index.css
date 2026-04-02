@@ -957,8 +957,8 @@ p {
   font-weight: 800;
   letter-spacing: 0.01em;
   text-transform: uppercase;
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong) 68%, #ffd24e);
-  box-shadow: 0 16px 30px rgba(255, 99, 84, 0.24);
+  background: linear-gradient(135deg, #4d79ff 0%, #5f5bff 48%, #7a4dff 100%);
+  box-shadow: 0 16px 30px rgba(77, 121, 255, 0.34);
   pointer-events: none;
 }
 
@@ -1116,6 +1116,12 @@ p {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
+}
+
+.game-action-button-take-turn {
+  background: linear-gradient(135deg, #4d79ff 0%, #5f5bff 48%, #7a4dff 100%);
+  border-color: rgba(57, 64, 168, 0.36);
+  box-shadow: 0 14px 28px rgba(77, 121, 255, 0.3);
 }
 
 .home-create-picker {

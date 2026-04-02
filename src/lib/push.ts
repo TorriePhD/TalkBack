@@ -314,7 +314,7 @@ async function subscribeUserToPush(userId: string, registration: ServiceWorkerRe
     }));
 
   if (isInvalidSubscriptionEndpoint(subscription)) {
-    debugPushError('Browser returned an invalid push subscription endpoint.', {
+    debugPush('Browser returned an invalid push subscription endpoint; skipping push setup.', {
       endpoint: subscription.endpoint,
       userId,
     });
@@ -325,11 +325,12 @@ async function subscribeUserToPush(userId: string, registration: ServiceWorkerRe
       // Ignore unsubscribe failures and surface the root cause instead.
     }
 
-    throw new Error('This browser returned an invalid push subscription endpoint.');
+    return false;
   }
 
   await savePushSubscription(userId, subscription);
   markSessionReady(userId);
+  return true;
 }
 
 export async function syncPushNotifications(
@@ -419,7 +420,14 @@ export async function syncPushNotifications(
     };
   }
 
-  await subscribeUserToPush(userId, registration);
+  const didSubscribe = await subscribeUserToPush(userId, registration);
+  if (!didSubscribe) {
+    return {
+      status: 'unsupported',
+      permission,
+    };
+  }
+
   debugPush('Push sync result: enabled.', {
     userId,
   });

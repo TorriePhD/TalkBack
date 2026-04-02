@@ -2080,10 +2080,10 @@ p {
 
 .campaign-side-action {
   position: absolute;
-  top: 52%;
-  right: -82px;
+  top: 14px;
+  right: 14px;
   z-index: 2;
-  transform: translateY(-50%);
+  transform: none;
   display: grid;
   justify-items: center;
   gap: 6px;
@@ -3034,7 +3034,8 @@ p {
 
   .campaign-side-action {
     width: 68px;
-    right: -72px;
+    top: 12px;
+    right: 12px;
   }
 
   .friend-row,

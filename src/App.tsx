@@ -469,20 +469,6 @@ function App() {
   }, [currentUserId, refreshAppData]);
 
   useEffect(() => {
-    if (!currentUserId || view !== 'home') {
-      return;
-    }
-
-    const pollInterval = window.setInterval(() => {
-      void refreshAppData({ silent: true, skipIfInFlight: true });
-    }, 10_000);
-
-    return () => {
-      window.clearInterval(pollInterval);
-    };
-  }, [currentUserId, refreshAppData, view]);
-
-  useEffect(() => {
     if (!selectedFriendId) {
       return;
     }

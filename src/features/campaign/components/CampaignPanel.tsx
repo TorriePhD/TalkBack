@@ -144,20 +144,6 @@ function getChallengeState(index: number, currentIndex: number, completedCount: 
   return 'locked';
 }
 
-function getAttemptSummary(attemptState: unknown) {
-  const freeTriesRemaining = getFreeTriesRemaining(attemptState);
-  const retryCost = getRetryCost(attemptState);
-
-  if (freeTriesRemaining === 0) {
-    return `Free tries used today. Next retry costs ${retryCost} BB Coins.`;
-  }
-
-  if (freeTriesRemaining === 1) {
-    return `1 free try left today. Extra retries cost ${retryCost} BB Coins.`;
-  }
-
-  return `2 free tries per challenge each day. Extra retries cost ${retryCost} BB Coins.`;
-}
 
 function formatThemeName(value: string | null | undefined) {
   if (!value) {
@@ -400,7 +386,6 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
 
         setOriginalRecording(originalRecorder.audioBlob);
         setGuideRecording(nextGuide);
-        setStage('guide');
       } catch (caughtError) {
         if (!cancelled) {
           setError(
@@ -423,13 +408,15 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
     if (
       !attemptRecorder.audioBlob ||
       attemptRecorder.isRecording ||
-      stage !== 'recording-attempt'
+      (stage !== 'recording-attempt' && stage !== 'attempt-ready')
     ) {
       return;
     }
 
     setAttemptRecording(attemptRecorder.audioBlob);
-    setStage('attempt-ready');
+    if (stage === 'recording-attempt') {
+      setStage('attempt-ready');
+    }
   }, [attemptRecorder.audioBlob, attemptRecorder.isRecording, stage]);
 
   const challenges = campaignState?.challenges ?? [];
@@ -443,9 +430,6 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
       : null) ?? currentChallenge;
   const currentAttemptState =
     activeChallenge?.challengeIndex === currentIndex ? campaignState?.attemptState ?? null : null;
-  const challengeState = currentChallenge
-    ? getChallengeState(currentChallenge.challengeIndex, currentIndex, completedCount)
-    : 'completed';
   const title = formatCampaignTitle(campaignState);
   const bannerImage = getAssetValue(campaignState, 'banner_image');
   const challengeIcon = getAssetValue(campaignState, 'challenge_icon');
@@ -492,8 +476,18 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
     setIsAnimatingReward(false);
     setCoinPreview(null);
     attemptRecorder.clearRecording();
-    setStage('recording-attempt');
+    setStage('attempt-ready');
   }, [attemptRecorder, setCoinPreview]);
+
+  const openGuideStep = useCallback(() => {
+    if (!guideRecording) {
+      return;
+    }
+
+    setError(null);
+    setInfo(null);
+    setStage('guide');
+  }, [guideRecording]);
 
   const startCampaignAttempt = useCallback(
     async (
@@ -590,18 +584,7 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
   );
 
   const openChallengeBriefing = useCallback(() => {
-    if (!currentChallenge) {
-      return;
-    }
-
-    setStageChallengeId(currentChallenge.id);
-    setError(null);
-    setInfo(null);
-    setStage('briefing');
-  }, [currentChallenge]);
-
-  const startChallengeFromBriefing = useCallback(() => {
-    if (!activeChallenge || isStartingAttempt) {
+    if (!currentChallenge || isStartingAttempt) {
       return;
     }
 
@@ -611,10 +594,10 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
     }
 
     void startCampaignAttempt(
-      activeChallenge,
-      activeChallenge.mode === 'reverse_only' ? 'recording-attempt' : 'recording-original',
+      currentChallenge,
+      currentChallenge.mode === 'reverse_only' ? 'recording-attempt' : 'recording-original',
     );
-  }, [activeChallenge, coins, currentAttemptState, isStartingAttempt, startCampaignAttempt]);
+  }, [coins, currentAttemptState, currentChallenge, isStartingAttempt, startCampaignAttempt]);
 
   const startRetryAttempt = useCallback(() => {
     if (!activeChallenge || isStartingAttempt) {
@@ -807,49 +790,14 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
           </div>
           <div className="button-row">
             <button className="button primary" onClick={resetFlow} type="button">
-              Back To Road
+              Done
             </button>
           </div>
         </div>
       );
     }
 
-    if (stage === 'briefing') {
-      return (
-        <div className="campaign-step-stack">
-          <div className="result-box campaign-phrase-card">
-            <span className="campaign-phrase-label">Challenge Phrase</span>
-            <strong>{activeChallenge.phrase}</strong>
-            <p className="campaign-reverse-example">
-              {activeChallenge.mode === 'reverse_only'
-                ? `Say it backwards out loud. Example: "${activeChallenge.phrase}" -> "${buildBackwardPhraseExample(activeChallenge.phrase)}"`
-                : 'Record the phrase normally, listen to the reversed guide, then imitate it.'}
-            </p>
-          </div>
-          <div className="campaign-attempt-pill">
-            <strong>Attempt Rules</strong>
-            <span>{getAttemptSummary(currentAttemptState)}</span>
-          </div>
-          <div className="button-row">
-            <button className="button secondary" onClick={resetFlow} type="button">
-              Back To Road
-            </button>
-            <button
-              className="button primary"
-              disabled={isStartingAttempt || !canStartRetry}
-              onClick={startChallengeFromBriefing}
-              type="button"
-            >
-              {isStartingAttempt ? (
-                'Starting...'
-              ) : (
-                <CampaignActionLabel label="Play" retryCost={currentRetryCost} />
-              )}
-            </button>
-          </div>
-        </div>
-      );
-    }
+
 
     if (stage === 'recording-original') {
       return (
@@ -866,6 +814,23 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
             onStart={startOriginalRecording}
             onStop={originalRecorder.stopRecording}
           />
+          {originalRecording ? (
+            <AudioPlayerCard
+              blob={originalRecording}
+              description="Play the recording forward."
+              title="Your forward recording"
+            />
+          ) : null}
+          <div className="button-row">
+            <button
+              className="button primary"
+              disabled={!guideRecording}
+              onClick={openGuideStep}
+              type="button"
+            >
+              Continue
+            </button>
+          </div>
         </div>
       );
     }
@@ -873,22 +838,12 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
     if (stage === 'guide') {
       return (
         <div className="campaign-step-stack">
-          <div className="audio-grid">
-            <AudioPlayerCard
-              blob={originalRecording}
-              description="Your forward recording."
-              title="Forward Phrase"
-            />
-            <AudioPlayerCard
-              blob={guideRecording}
-              description="Use this reversed clip as the guide."
-              title="Reversed Guide"
-            />
-          </div>
+          <AudioPlayerCard
+            blob={guideRecording}
+            description="Use this reversed clip as the guide."
+            title="Reversed Guide"
+          />
           <div className="button-row">
-            <button className="button secondary" onClick={resetFlow} type="button">
-              Back To Road
-            </button>
             <button className="button primary" onClick={openAttemptStep} type="button">
               Record Imitation
             </button>
@@ -930,17 +885,33 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
     if (stage === 'attempt-ready') {
       return (
         <div className="campaign-step-stack">
-          <AudioPlayerCard
-            blob={attemptRecording}
-            description="Replay your latest attempt before it is scored."
-            title="Attempt Preview"
+          <div className="result-box campaign-phrase-card">
+            <span className="campaign-phrase-label">Imitate the reversed guide</span>
+            <strong>{activeChallenge.phrase}</strong>
+          </div>
+          <ToggleRecordButton
+            disabled={false}
+            isPreparing={attemptRecorder.isPreparing}
+            isRecording={attemptRecorder.isRecording}
+            liveStream={attemptRecorder.liveStream}
+            onStart={startAttemptRecording}
+            onStop={attemptRecorder.stopRecording}
           />
+          {attemptRecording ? (
+            <AudioPlayerCard
+              blob={attemptRecording}
+              description="Replay your latest attempt before it is scored."
+              title="Attempt Preview"
+            />
+          ) : null}
           <div className="button-row">
-            <button className="button secondary" onClick={openAttemptStep} type="button">
-              Record Again
-            </button>
-            <button className="button primary" onClick={() => void handleProcessAttempt()} type="button">
-              Score Challenge
+            <button
+              className="button primary"
+              disabled={!attemptRecording}
+              onClick={() => void handleProcessAttempt()}
+              type="button"
+            >
+              Submit
             </button>
           </div>
         </div>
@@ -960,13 +931,6 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
     }
 
     if (stage === 'reward' && campaignReward) {
-      const rewardSummary = campaignReward.advanced
-        ? 'The next egg is ready on the road.'
-        : 'You still need 3 stars to unlock the next egg.';
-      const rewardDetail =
-        campaignReward.rewardAmount > 0
-          ? `+${campaignReward.rewardAmount} BB Coins added from this attempt.`
-          : 'No BB Coins were awarded from this attempt.';
 
       return (
         <div className="campaign-step-stack reward-stage-step">
@@ -977,45 +941,10 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
             reward={campaignReward}
             startCompleted={!isAnimatingReward}
           >
-            <div className="reward-reveal-details">
-              <p>
-                <strong>{campaignReward.advanced ? 'Challenge cleared.' : 'Attempt scored.'}</strong>{' '}
-                {rewardSummary}
-              </p>
-              <p>{rewardDetail}</p>
-            </div>
-            <div className="reward-sequence-total">
-              <span className="reward-sequence-total-label">Total BB Coins</span>
-              <strong className="reward-sequence-total-value">
-                {campaignReward.currentBalance.toLocaleString()}
-              </strong>
-              <span className="reward-sequence-total-gain">
-                +{campaignReward.rewardAmount.toLocaleString()} reward
-              </span>
-            </div>
-            <div className="audio-grid">
-              <AudioPlayerCard
-                blob={attemptRecording}
-                description="Your recorded attempt."
-                title="Attempt Audio"
-              />
-              <AudioPlayerCard
-                blob={reversedAttemptRecording}
-                description="This reversed clip was converted back to forward speech and scored in the browser."
-                title="Scoring Audio"
-              />
-            </div>
             <div className="button-row">
-              {!campaignReward.advanced ? (
-                <button
-                  className="button secondary"
-                  disabled={isAnimatingReward || isStartingAttempt}
-                  onClick={resetFlow}
-                  type="button"
-                >
-                  Back To Road
-                </button>
-              ) : null}
+              <button className="button secondary" onClick={resetFlow} type="button">
+                Done
+              </button>
               <button
                 className="button primary"
                 disabled={
@@ -1026,9 +955,7 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
                 onClick={campaignReward.advanced ? resetFlow : startRetryAttempt}
                 type="button"
               >
-                {campaignReward.advanced ? (
-                  'Back To Road'
-                ) : isStartingAttempt ? (
+                {campaignReward.advanced ? 'Next Challenge' : isStartingAttempt ? (
                   'Starting...'
                 ) : (
                   <CampaignActionLabel label="Try Again" retryCost={currentRetryCost} />
@@ -1073,7 +1000,7 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
           </div>
           <div className="button-row">
             <button className="button secondary" onClick={resetFlow} type="button">
-              Back To Road
+              Done
             </button>
             {stars < 3 ? (
               <button
@@ -1225,45 +1152,11 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
           </div>
         ) : (
           <div className="campaign-play-page">
-            <div className="campaign-topbar">
-              <button
-                className="button ghost round-screen-back"
-                disabled={stage === 'processing' || (stage === 'reward' && isAnimatingReward)}
-                onClick={resetFlow}
-                type="button"
-              >
-                Back To Road
-              </button>
-            </div>
-
             {info ? <div className="success-banner">{info}</div> : null}
 
             {activeChallenge ? (
-              <div className="campaign-play-hero">
-                <div className="campaign-play-copy">
-                  <div className="eyebrow">Challenge {activeChallenge.challengeIndex}</div>
-                  <h2>{title}</h2>
-                  <p>
-                    {stage === 'reward'
-                      ? campaignReward?.advanced
-                        ? 'Reward reveal for the challenge you just cleared.'
-                        : 'Reward reveal for your latest attempt. You still need 3 stars to unlock the next egg.'
-                      : challengeState === 'current'
-                        ? 'This is your next live challenge. Finish it with 3 stars to unlock the next egg.'
-                        : 'Campaign progress has already moved past this challenge.'}
-                  </p>
-                </div>
-
-                <div className="campaign-play-badges">
-                  <span className={`badge ${activeChallenge.difficulty}`}>
-                    {formatDifficultyLabel(activeChallenge.difficulty)}
-                  </span>
-                  <span className="badge attempted">
-                    {activeChallenge.mode === 'reverse_only' ? 'Reverse Only' : 'Normal'}
-                  </span>
-                </div>
-
-                <div className="campaign-play-icon">
+              <div className="campaign-play-header">
+                <div className="campaign-play-icon compact">
                   {challengeIcon ? <img alt="" aria-hidden="true" src={challengeIcon} /> : null}
                   <strong>{activeChallenge.challengeIndex}</strong>
                 </div>

@@ -1886,6 +1886,11 @@ p {
   overflow: auto;
 }
 
+.campaign-play-header {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .campaign-topbar {
   display: flex;
   justify-content: flex-start;
@@ -2324,6 +2329,21 @@ p {
 .campaign-play-icon {
   grid-column: 2;
   grid-row: 1 / span 2;
+}
+
+.campaign-play-icon.compact {
+  width: 86px;
+  height: 102px;
+}
+
+.campaign-play-icon.compact::before {
+  content: none;
+}
+
+.campaign-play-icon.compact img {
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .campaign-step-stack {

@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
+import { useMemo, useRef, useState, type TouchEvent } from 'react';
 import { StarRating } from '../../../components/StarRating';
-import { loadActiveCampaignState } from '../../../lib/campaigns';
 
 interface HomeFriendSummary {
   id: string;
@@ -15,7 +14,7 @@ interface CreateGameOption {
 }
 
 interface HomePanelProps {
-  currentUserId: string;
+  campaignBannerImage?: string | null;
   friends: HomeFriendSummary[];
   createGameOptions?: CreateGameOption[];
   onCreateGame?: (friendId: string) => void;
@@ -93,7 +92,7 @@ function RefreshIcon() {
 }
 
 export function HomePanel({
-  currentUserId,
+  campaignBannerImage,
   friends,
   createGameOptions,
   onCreateGame,
@@ -107,7 +106,6 @@ export function HomePanel({
   const [isChoosingFriend, setIsChoosingFriend] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [campaignBannerImage, setCampaignBannerImage] = useState<string | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const isPullingRef = useRef(false);
   const sortedCreateGameOptions = useMemo(
@@ -117,37 +115,6 @@ export function HomePanel({
       ),
     [createGameOptions],
   );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadCampaignBanner = async () => {
-      try {
-        const campaignState = await loadActiveCampaignState(currentUserId);
-
-        if (cancelled || !campaignState) {
-          return;
-        }
-
-        const assets = campaignState.assets;
-        const bannerImage =
-          Array.isArray(assets)
-            ? assets.find((entry) => entry.key === 'banner_image')?.value ?? null
-            : assets.banner_image ?? null;
-        setCampaignBannerImage(bannerImage);
-      } catch {
-        if (!cancelled) {
-          setCampaignBannerImage(null);
-        }
-      }
-    };
-
-    void loadCampaignBanner();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUserId]);
 
   const handleCreateGameClick = () => {
     if (!sortedCreateGameOptions.length) {

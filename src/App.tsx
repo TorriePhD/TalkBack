@@ -23,6 +23,7 @@ import {
   debugPushError,
   syncPushNotifications,
 } from './lib/push';
+import { loadActiveCampaignState } from './lib/campaigns';
 import { archiveCompletedRound, listRounds } from './lib/rounds';
 import { supabaseConfigError } from './lib/supabase';
 import { InstallAppPrompt } from './pwa/InstallAppPrompt';
@@ -161,6 +162,42 @@ function FullscreenLoadingScreen() {
   );
 }
 
+function preloadImage(url: string) {
+  if (typeof window === 'undefined') {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error('Unable to load image.'));
+    image.src = url;
+  });
+}
+
+async function cacheCampaignBannerImage(url: string) {
+  if (typeof window === 'undefined' || !('caches' in window)) {
+    return;
+  }
+
+  try {
+    const cache = await window.caches.open('campaign-banner-v1');
+    const existing = await cache.match(url);
+
+    if (existing) {
+      return;
+    }
+
+    const response = await fetch(url, { cache: 'force-cache', mode: 'cors' });
+
+    if (response.ok) {
+      await cache.put(url, response.clone());
+    }
+  } catch {
+    // Best-effort cache warmup.
+  }
+}
+
 function DrawerButton({
   active = false,
   children,
@@ -265,6 +302,8 @@ function App() {
   const [pushError, setPushError] = useState<string | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [campaignBannerImage, setCampaignBannerImage] = useState<string | null>(null);
+  const [hasResolvedInitialCampaignBanner, setHasResolvedInitialCampaignBanner] = useState(false);
   const initialLoadRequestIdRef = useRef(0);
   const dataRefreshInFlightRef = useRef(false);
   const showSecureContextWarning =
@@ -453,6 +492,8 @@ function App() {
       setAppPath('/');
       setIsMenuOpen(false);
       setIsComposingNextRound(false);
+      setCampaignBannerImage(null);
+      setHasResolvedInitialCampaignBanner(false);
       initialLoadRequestIdRef.current += 1;
       setHasLoadedInitialData(false);
       return;
@@ -464,9 +505,53 @@ function App() {
     setView(DEFAULT_SIGNED_IN_VIEW);
     setIsMenuOpen(false);
     setIsComposingNextRound(false);
+    setCampaignBannerImage(null);
+    setHasResolvedInitialCampaignBanner(false);
     setHasLoadedInitialData(false);
     void refreshAppData({ initialLoadRequestId, resolveInitialLoad: true });
   }, [currentUserId, refreshAppData]);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadCampaignBanner = async () => {
+      try {
+        const campaignState = await loadActiveCampaignState(currentUserId);
+
+        if (cancelled) {
+          return;
+        }
+
+        const bannerImage = campaignState.assets.banner_image ?? null;
+        setCampaignBannerImage(bannerImage);
+
+        if (bannerImage) {
+          await Promise.allSettled([
+            preloadImage(bannerImage),
+            cacheCampaignBannerImage(bannerImage),
+          ]);
+        }
+      } catch {
+        if (!cancelled) {
+          setCampaignBannerImage(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setHasResolvedInitialCampaignBanner(true);
+        }
+      }
+    };
+
+    void loadCampaignBanner();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!selectedFriendId) {
@@ -676,7 +761,8 @@ function App() {
   );
 
   const showFullscreenLoader =
-    isAuthLoading || (Boolean(currentUserId) && !hasLoadedInitialData && !loadError);
+    isAuthLoading ||
+    (Boolean(currentUserId) && (!hasLoadedInitialData || !hasResolvedInitialCampaignBanner) && !loadError);
 
   return (
     <ResourceProvider currentUserId={currentUserId}>
@@ -775,7 +861,7 @@ function App() {
               ) : null}
               {appPath === '/' && view === 'home' ? (
                 <HomePanel
-                  currentUserId={currentUserId}
+                  campaignBannerImage={campaignBannerImage}
                   createGameOptions={createGameOptions}
                   friends={homeFriendRows}
                   onCreateGame={handleCreateGame}

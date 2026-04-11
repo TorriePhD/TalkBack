@@ -1112,6 +1112,12 @@ p {
   flex: 0 0 auto;
 }
 
+.game-action-button-their-turn {
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong) 68%, #ffd24e);
+  color: #fffdfb;
+  box-shadow: 0 16px 30px rgba(255, 99, 84, 0.24);
+}
+
 .game-action-icon {
   width: 14px;
   height: 14px;

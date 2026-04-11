@@ -25,6 +25,8 @@
   --sun-soft: rgba(213, 150, 23, 0.14);
   --sky: #4d79ff;
   --sky-soft: rgba(77, 121, 255, 0.14);
+  --neon-purple: #a93cff;
+  --neon-purple-strong: #7a00ff;
   --danger: #cc5b69;
   --success: #1f7f59;
   --shadow: 0 18px 40px rgba(29, 35, 54, 0.1);
@@ -952,13 +954,13 @@ p {
   align-items: center;
   gap: 8px;
   justify-content: center;
-  color: #fffdfb;
+  color: #ffffff;
   font-size: 0.95rem;
   font-weight: 800;
   letter-spacing: 0.01em;
   text-transform: uppercase;
-  background: linear-gradient(135deg, #4d79ff 0%, #5f5bff 48%, #7a4dff 100%);
-  box-shadow: 0 16px 30px rgba(77, 121, 255, 0.34);
+  background: linear-gradient(135deg, var(--neon-purple) 0%, var(--neon-purple-strong) 100%);
+  box-shadow: 0 16px 30px rgba(122, 0, 255, 0.36);
   pointer-events: none;
 }
 
@@ -1125,9 +1127,10 @@ p {
 }
 
 .game-action-button-take-turn {
-  background: linear-gradient(135deg, #4d79ff 0%, #5f5bff 48%, #7a4dff 100%);
-  border-color: rgba(57, 64, 168, 0.36);
-  box-shadow: 0 14px 28px rgba(77, 121, 255, 0.3);
+  background: linear-gradient(135deg, var(--neon-purple) 0%, var(--neon-purple-strong) 100%);
+  border-color: rgba(122, 0, 255, 0.42);
+  box-shadow: 0 14px 28px rgba(122, 0, 255, 0.34);
+  color: #ffffff;
 }
 
 .home-create-picker {

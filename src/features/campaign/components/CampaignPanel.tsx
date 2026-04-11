@@ -615,6 +615,19 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
     );
   }, [activeChallenge, coins, currentAttemptState, isStartingAttempt, startCampaignAttempt]);
 
+  const startNextChallenge = useCallback(() => {
+    if (!currentChallenge || isStartingAttempt) {
+      return;
+    }
+
+    if (!hasEnoughCoinsForRetry(campaignState?.attemptState ?? null, coins)) {
+      setError(`You need ${getRetryCost(campaignState?.attemptState)} BB Coins for another campaign retry.`);
+      return;
+    }
+
+    void startCampaignAttempt(currentChallenge, 'recording-original');
+  }, [campaignState?.attemptState, coins, currentChallenge, isStartingAttempt, startCampaignAttempt]);
+
   const handleProcessAttempt = useCallback(async () => {
     if (!activeChallenge || !attemptRecording) {
       return;
@@ -941,6 +954,13 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
             reward={campaignReward}
             startCompleted={!isAnimatingReward}
           >
+            {reversedAttemptRecording ? (
+              <AudioPlayerCard
+                blob={reversedAttemptRecording}
+                description="This reversed clip was converted back to forward speech and scored in the browser."
+                title="Scoring Audio"
+              />
+            ) : null}
             <div className="button-row">
               <button className="button secondary" onClick={resetFlow} type="button">
                 Done
@@ -952,7 +972,7 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
                   isStartingAttempt ||
                   (!campaignReward.advanced && !canStartRetry)
                 }
-                onClick={campaignReward.advanced ? resetFlow : startRetryAttempt}
+                onClick={campaignReward.advanced ? startNextChallenge : startRetryAttempt}
                 type="button"
               >
                 {campaignReward.advanced ? 'Next Challenge' : isStartingAttempt ? (

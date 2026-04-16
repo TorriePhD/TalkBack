@@ -12,7 +12,7 @@ interface FriendsPanelProps {
 export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps) {
   const [friendUsername, setFriendUsername] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [, setInfo] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
 
@@ -215,7 +215,6 @@ export function FriendsPanel({ friends, requests, onRefresh }: FriendsPanelProps
         </div>
 
         {error ? <div className="error-banner">{error}</div> : null}
-        {info ? <div className="success-banner">{info}</div> : null}
       </div>
     </section>
   );

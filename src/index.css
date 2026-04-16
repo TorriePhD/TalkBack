@@ -515,6 +515,7 @@ p {
 }
 
 .success-banner {
+  display: none;
   background: rgba(31, 127, 89, 0.12);
   color: #1c6a4b;
   border-color: rgba(31, 127, 89, 0.18);

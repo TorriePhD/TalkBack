@@ -238,7 +238,7 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
   const [stageChallengeId, setStageChallengeId] = useState<string | null>(null);
   const [isLoadingCampaign, setIsLoadingCampaign] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [, setInfo] = useState<string | null>(null);
   const [originalRecording, setOriginalRecording] = useState<Blob | null>(null);
   const [guideRecording, setGuideRecording] = useState<Blob | null>(null);
   const [attemptRecording, setAttemptRecording] = useState<Blob | null>(null);
@@ -1080,8 +1080,6 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
 
         {stage === 'overview' ? (
           <div className="campaign-road-page">
-            {info ? <div className="success-banner">{info}</div> : null}
-
             {isLoadingCampaign ? (
               <div className="round-loader-callout" aria-live="polite" role="status">
                 <WaveformLoader className="round-loader-callout-spinner" size={92} strokeWidth={3.6} />
@@ -1175,8 +1173,6 @@ export function CampaignPanel({ currentUserId }: CampaignPanelProps) {
           </div>
         ) : (
           <div className="campaign-play-page">
-            {info ? <div className="success-banner">{info}</div> : null}
-
             {activeChallenge ? (
               <div className="campaign-play-header">
                 <div className="campaign-play-icon compact">

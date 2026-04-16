@@ -145,7 +145,7 @@ export function PlayRoundPanel({
   const { coins, isLoadingCoins, refreshCoins, setCoinBalance, setCoinPreview } = useCoins();
   const [guess, setGuess] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [, setInfo] = useState<string | null>(null);
   const [isSavingAttempt, setIsSavingAttempt] = useState(false);
   const [isSubmittingGuess, setIsSubmittingGuess] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
@@ -1062,7 +1062,6 @@ export function PlayRoundPanel({
       <div className="stack">
         {recorder.error ? <div className="error-banner">{recorder.error}</div> : null}
         {error ? <div className="error-banner">{error}</div> : null}
-        {info ? <div className="success-banner">{info}</div> : null}
       </div>
     </section>
   );
